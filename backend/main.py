@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.config import settings, get_available_providers
+from app.core.config import settings, get_available_providers, validate_startup
 from app.routers import chat, fraud, loans, transactions
+
+validate_startup()
 
 app = FastAPI(
     title="NaijaFinAI Agent API",
