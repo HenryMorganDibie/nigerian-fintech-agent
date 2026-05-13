@@ -102,6 +102,19 @@ naija-fintech-agent/
 | `GET` | `/api/providers` | Available LLM providers |
 | `GET` | `/api/health` | Health check |
 
+## Provider Setup
+
+The frontend lets you switch providers in the sidebar. Make sure to choose your provider in the web UI before sending the first message.
+
+Update `.env` to match the provider you want to test:
+
+- `DEFAULT_LLM_PROVIDER=openai`
+- `DEFAULT_LLM_PROVIDER=anthropic`
+- `DEFAULT_LLM_PROVIDER=google`
+- `DEFAULT_LLM_PROVIDER=groq`
+
+For free testing, `groq` or `google` are the recommended providers. Make sure the corresponding key is set in `.env` and the provider matches the selected sidebar option.
+
 ---
 
 ## Quickstart
@@ -110,7 +123,19 @@ naija-fintech-agent/
 git clone https://github.com/HenryMorganDibie/naija-fintech-agent.git
 cd naija-fintech-agent
 cp .env.example .env   # add your API keys
+```
 
+### Run with Docker Compose
+
+```bash
+docker compose up --build
+```
+
+Then open `http://localhost`
+
+### Run locally without Docker
+
+```bash
 # Backend
 cd backend && pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
@@ -120,6 +145,14 @@ cd frontend && npm install && npm run dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173)
+
+## Screenshot Example
+
+Below is a sample chat screenshot for the agent console. The image is stored in `docs/chat-example.png`.
+
+![Sample chat request and response](docs/chat-example.png)
+
+> Tip: If you want to replace the screenshot later, keep the filename `docs/chat-example.png` so the README link stays valid.
 
 ---
 

@@ -11,12 +11,16 @@ class Settings(BaseSettings):
     app_env: str = "development"
     secret_key: str = "dev-secret-key"
     # Accepts both a Python list and a comma-separated string from .env
-    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    cors_origins: str | list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
     openai_api_key: str = ""
+    openai_model: str = "gpt-3.5-turbo"
     anthropic_api_key: str = ""
+    anthropic_model: str = "claude-2.1"
     google_api_key: str = ""
+    google_model: str = "gemini-flash-lite-latest"
     groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
     default_llm_provider: Literal["openai", "anthropic", "google", "groq"] = "openai"
 
     @field_validator("cors_origins", mode="before")
@@ -35,13 +39,13 @@ settings = Settings()
 def get_available_providers() -> list[dict]:
     providers = []
     if settings.openai_api_key:
-        providers.append({"id": "openai", "name": "OpenAI GPT-4o", "model": "gpt-4o"})
+        providers.append({"id": "openai", "name": "OpenAI", "model": settings.openai_model})
     if settings.anthropic_api_key:
-        providers.append({"id": "anthropic", "name": "Anthropic Claude", "model": "claude-sonnet-4-20250514"})
+        providers.append({"id": "anthropic", "name": "Anthropic", "model": settings.anthropic_model})
     if settings.google_api_key:
-        providers.append({"id": "google", "name": "Google Gemini", "model": "gemini-1.5-pro"})
+        providers.append({"id": "google", "name": "Google Gemini", "model": settings.google_model})
     if settings.groq_api_key:
-        providers.append({"id": "groq", "name": "Groq LLaMA", "model": "llama-3.3-70b-versatile"})
+        providers.append({"id": "groq", "name": "Groq", "model": settings.groq_model})
     return providers
 
 
@@ -50,6 +54,10 @@ def validate_startup():
     print("\n── NaijaFinAI Startup Check ──────────────────")
     print(f"  .env loaded from : {ENV_FILE}")
     print(f"  Default provider : {settings.default_llm_provider}")
+    print(f"  OpenAI model    : {settings.openai_model}")
+    print(f"  Anthropic model : {settings.anthropic_model}")
+    print(f"  Google model    : {settings.google_model}")
+    print(f"  Groq model      : {settings.groq_model}")
     keys = {
         "openai":    settings.openai_api_key,
         "anthropic": settings.anthropic_api_key,
