@@ -1,14 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings, get_available_providers, validate_startup
-from app.routers import chat, fraud, loans, transactions
+from app.routers import chat, fraud, loans, transactions, eval, workflows, media
 
 validate_startup()
 
 app = FastAPI(
     title="NaijaFinAI Agent API",
-    description="Production-grade AI agent for Nigerian fintechs — fraud intelligence, credit assessment, transaction analytics, NDPA compliance.",
-    version="2.0.0",
+    description="Production-grade AI agent for Nigerian fintechs — fraud intelligence, CBN compliance, Bayesian risk scoring, multi-language support.",
+    version="3.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -25,11 +25,14 @@ app.include_router(chat.router)
 app.include_router(fraud.router)
 app.include_router(loans.router)
 app.include_router(transactions.router)
+app.include_router(eval.router)
+app.include_router(workflows.router)
+app.include_router(media.router)
 
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "service": "NaijaFinAI Agent", "version": "2.0.0"}
+    return {"status": "ok", "service": "NaijaFinAI Agent", "version": "3.0.0"}
 
 
 @app.get("/api/providers")

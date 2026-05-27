@@ -133,3 +133,100 @@ class LoanEligibilityResponse(BaseModel):
     cbn_references: list[str]
     audit_id: str
     provider_used: str
+
+
+# ── Evaluation Harness ───────────────────────────────────────
+
+class EvalSample(BaseModel):
+    transaction_id: str
+    label: Literal["fraud", "legit"]
+    transaction: Transaction
+
+
+class EvalRunRequest(BaseModel):
+    samples: list[EvalSample] = []
+    use_synthetic: bool = True
+    provider: Optional[str] = None
+
+
+class SignalMetrics(BaseModel):
+    signal: str
+    true_positives: int
+    false_positives: int
+    false_negatives: int
+    precision: float
+    recall: float
+    f1: float
+
+
+class EvalRunResponse(BaseModel):
+    total_samples: int
+    fraud_samples: int
+    legit_samples: int
+    overall_precision: float
+    overall_recall: float
+    overall_f1: float
+    accuracy: float
+    confusion_matrix: dict[str, int]
+    per_signal_metrics: list[SignalMetrics]
+    provider_used: str
+
+
+# ── Case Output Format ────────────────────────────────────────
+
+class CaseOutput(BaseModel):
+    case_id: str
+    transaction_id: str
+    risk_score: int
+    posterior_fraud_probability: float
+    risk_level: str
+    top_3_signals: list[dict]
+    regulatory_action: str
+    filings_required: list[RegulatoryFilingOut]
+    audit_log_id: str
+    llm_narrative: str
+    provider_used: str
+    created_at: str
+
+
+# ── Workflow Demo Scenarios ───────────────────────────────────
+
+class WorkflowScenario(BaseModel):
+    scenario_id: str
+    name: str
+    description: str
+
+
+class WorkflowRunRequest(BaseModel):
+    scenario_id: Literal[
+        "loan_application_fraud_check",
+        "agent_wallet_monitoring",
+        "chargeback_investigation",
+    ]
+    provider: Optional[str] = None
+
+
+class WorkflowRunResponse(BaseModel):
+    scenario_id: str
+    scenario_name: str
+    steps: list[dict]
+    final_verdict: str
+    case_output: CaseOutput
+    provider_used: str
+
+
+# ── Voice & File Upload ───────────────────────────────────────
+
+class VoiceTranscribeResponse(BaseModel):
+    transcript: str
+    language_detected: str
+    confidence: float
+
+
+class FileAnalysisResponse(BaseModel):
+    filename: str
+    file_type: str
+    extracted_text: str
+    summary: str
+    fraud_signals_detected: list[str]
+    provider_used: str

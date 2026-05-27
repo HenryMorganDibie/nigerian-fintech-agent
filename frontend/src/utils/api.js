@@ -24,10 +24,40 @@ export async function streamChat({ message, history, provider, onToken, onToolCa
   }
 }
 
-export const fetchProviders = () => fetch(`${BASE}/providers`).then(r => r.json()).catch(() => ({ providers: [] }));
+export const fetchProviders = () =>
+  fetch(`${BASE}/providers`).then(r => r.json()).catch(() => ({ providers: [] }));
 
-export async function analyzeFraud(payload) {
-  const r = await fetch(`${BASE}/fraud/analyze`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-  if (!r.ok) throw new Error("Fraud API failed");
+export const runEval = (provider) =>
+  fetch(`${BASE}/eval/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ use_synthetic: true, provider }),
+  }).then(r => r.json());
+
+export const runWorkflow = (scenario_id, provider) =>
+  fetch(`${BASE}/workflows/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scenario_id, provider }),
+  }).then(r => r.json());
+
+export const listWorkflows = () =>
+  fetch(`${BASE}/workflows/scenarios`).then(r => r.json());
+
+export async function uploadVoice(file, provider) {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("provider", provider || "groq");
+  const r = await fetch(`${BASE}/media/voice`, { method: "POST", body: fd });
+  if (!r.ok) throw new Error("Voice upload failed");
+  return r.json();
+}
+
+export async function uploadFile(file, provider) {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("provider", provider || "groq");
+  const r = await fetch(`${BASE}/media/upload`, { method: "POST", body: fd });
+  if (!r.ok) throw new Error("File upload failed");
   return r.json();
 }
