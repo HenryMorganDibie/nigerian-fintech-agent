@@ -25,3 +25,4 @@ langchain-anthropic>=0.2
 
 # ── File parsing (lazy-loaded, small) ────────────────────────
 pypdf>=4.0.0
+# cache-bust: 1780008241

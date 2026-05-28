@@ -2,13 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# bust cache on every deploy
-ARG CACHEBUST=2
-
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Copy all app code explicitly — forces Docker to invalidate cache
+COPY main.py .
+COPY app/ ./app/
 
 EXPOSE 8000
 
