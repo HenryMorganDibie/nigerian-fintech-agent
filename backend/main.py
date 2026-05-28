@@ -7,7 +7,7 @@ validate_startup()
 
 app = FastAPI(
     title="NaijaFinAI Agent API",
-    description="Production-grade AI agent for Nigerian fintechs — fraud intelligence, CBN compliance, Bayesian risk scoring, multi-language support.",
+    description="Production-grade AI agent for Nigerian fintechs.",
     version="3.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -16,6 +16,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    allow_origin_regex=r"https://.*\.github\.io",  # covers all GitHub Pages
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,4 +38,7 @@ async def health():
 
 @app.get("/api/providers")
 async def providers():
-    return {"providers": get_available_providers(), "default": settings.default_llm_provider}
+    return {
+        "providers": get_available_providers(),
+        "default": settings.default_llm_provider,
+    }

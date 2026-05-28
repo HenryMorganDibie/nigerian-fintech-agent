@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Trash2, MessageSquare, BarChart2, Zap, Mic } from "lucide-react";
+import { Send, Trash2, MessageSquare, BarChart2, Zap, Mic, AlertTriangle, CheckCircle } from "lucide-react";
 import { useChat } from "./hooks/useChat";
 import { ChatMessage } from "./components/ChatMessage";
 import { Sidebar } from "./components/Sidebar";
@@ -7,21 +7,32 @@ import { ToolCallBanner } from "./components/ToolCallBanner";
 import { EvalDashboard } from "./components/EvalDashboard";
 import { WorkflowDemo } from "./components/WorkflowDemo";
 import { MediaInput } from "./components/MediaInput";
+import { checkBackendHealth } from "./utils/health";
 
 const TABS = [
-  { id: "chat",      label: "Chat",      Icon: MessageSquare },
-  { id: "workflows", label: "Workflows", Icon: Zap },
-  { id: "eval",      label: "Eval",      Icon: BarChart2 },
-  { id: "voice",     label: "Voice & Files", Icon: Mic },
+  { id: "chat",      label: "Chat",         Icon: MessageSquare },
+  { id: "workflows", label: "Workflows",    Icon: Zap },
+  { id: "eval",      label: "Eval",         Icon: BarChart2 },
+  { id: "voice",     label: "Voice & Files",Icon: Mic },
 ];
 
 export default function App() {
   const [provider, setProvider] = useState("groq");
   const [tab, setTab] = useState("chat");
   const [input, setInput] = useState("");
+  const [backendStatus, setBackendStatus] = useState(null); // null | "ok" | "error"
+  const [backendMsg, setBackendMsg] = useState("");
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
   const { messages, send, loading, tools, language, clear } = useChat(provider);
+
+  // Check backend health on load
+  useEffect(() => {
+    checkBackendHealth().then(({ ok, reason }) => {
+      setBackendStatus(ok ? "ok" : "error");
+      if (!ok) setBackendMsg(reason);
+    });
+  }, []);
 
   useEffect(() => {
     if (tab === "chat") bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -41,33 +52,36 @@ export default function App() {
       <Sidebar provider={provider} setProvider={setProvider} language={language} onPrompt={handleSend} />
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
-        {/* Scan line */}
         <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
           <div className="scan-line" />
         </div>
 
         {/* Header */}
         <header style={{ padding: "10px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--ink)", zIndex: 2, gap: 16 }}>
-          {/* Tabs */}
           <div style={{ display: "flex", gap: 2 }}>
             {TABS.map(({ id, label, Icon }) => (
               <button key={id} onClick={() => setTab(id)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 5,
-                  padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 500,
-                  background: tab === id ? "var(--jade-dim)" : "transparent",
-                  color: tab === id ? "var(--jade)" : "var(--muted)",
-                  transition: "all 0.15s",
-                }}>
+                style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 500, background: tab === id ? "var(--jade-dim)" : "transparent", color: tab === id ? "var(--jade)" : "var(--muted)", transition: "all 0.15s" }}>
                 <Icon size={11} /> {label}
               </button>
             ))}
           </div>
 
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {/* Backend status indicator */}
+            {backendStatus === "ok" && (
+              <div style={{ fontSize: 10, color: "var(--jade)", display: "flex", alignItems: "center", gap: 4 }}>
+                <CheckCircle size={10} /> Backend online
+              </div>
+            )}
+            {backendStatus === "error" && (
+              <div title={backendMsg} style={{ fontSize: 10, color: "var(--ember)", display: "flex", alignItems: "center", gap: 4, cursor: "help" }}>
+                <AlertTriangle size={10} /> {backendMsg.slice(0, 40)}…
+              </div>
+            )}
             <div style={{ fontSize: 10, color: "var(--jade)", display: "flex", alignItems: "center", gap: 4 }}>
               <span style={{ width: 6, height: 6, background: "var(--jade)", borderRadius: "50%", animation: "pulse-jade 2s infinite", display: "inline-block" }} />
-              {provider.toUpperCase()} · LIVE
+              {provider.toUpperCase()}
             </div>
             <button onClick={clear} style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 6, padding: "5px 8px", cursor: "pointer", color: "var(--muted)", display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}>
               <Trash2 size={11} /> Clear
@@ -77,15 +91,13 @@ export default function App() {
 
         <ToolCallBanner tools={tools} />
 
-        {/* Tab panels */}
         <div className="grid-bg" style={{ flex: 1, overflow: "hidden", position: "relative" }}>
-          {/* Chat */}
+          {/* Chat tab */}
           <div style={{ display: tab === "chat" ? "flex" : "none", flexDirection: "column", height: "100%" }}>
             <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
               {messages.map((msg, i) => <ChatMessage key={i} message={msg} />)}
               <div ref={bottomRef} />
             </div>
-            {/* Input */}
             <div style={{ borderTop: "1px solid var(--border)", padding: "14px 20px", background: "var(--ink)" }}>
               <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
                 <textarea ref={textareaRef} value={input}
@@ -102,26 +114,14 @@ export default function App() {
                 </button>
               </div>
               <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 6, textAlign: "center" }}>
-                CBN · NFIU · NDPA 2023 · Bayesian Fraud Scoring · Groq Free Tier
+                CBN · NFIU · NDPA 2023 · Bayesian Fraud Scoring · Powered by Groq (Free)
               </div>
             </div>
           </div>
 
-          {tab === "workflows" && (
-            <div style={{ height: "100%", overflowY: "auto" }}>
-              <WorkflowDemo provider={provider} />
-            </div>
-          )}
-          {tab === "eval" && (
-            <div style={{ height: "100%", overflowY: "auto" }}>
-              <EvalDashboard provider={provider} />
-            </div>
-          )}
-          {tab === "voice" && (
-            <div style={{ height: "100%", overflowY: "auto" }}>
-              <MediaInput provider={provider} onTranscript={(t) => { setInput(t); setTab("chat"); }} />
-            </div>
-          )}
+          {tab === "workflows" && <div style={{ height: "100%", overflowY: "auto" }}><WorkflowDemo provider={provider} /></div>}
+          {tab === "eval"      && <div style={{ height: "100%", overflowY: "auto" }}><EvalDashboard provider={provider} /></div>}
+          {tab === "voice"     && <div style={{ height: "100%", overflowY: "auto" }}><MediaInput provider={provider} onTranscript={(t) => { setInput(t); setTab("chat"); }} /></div>}
         </div>
       </div>
     </div>

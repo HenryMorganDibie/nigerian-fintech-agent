@@ -9,7 +9,11 @@ ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 class Settings(BaseSettings):
     app_env: str = "development"
     secret_key: str = "dev-secret-key"
-    cors_origins: str | list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    cors_origins: str | list[str] = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://henrymorgandibie.github.io",
+    ]
 
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
@@ -19,14 +23,15 @@ class Settings(BaseSettings):
     google_model: str = "gemini-1.5-pro"
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
-    # Groq is default — free, no credit card needed
     default_llm_provider: Literal["openai", "anthropic", "google", "groq"] = "groq"
 
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors(cls, v):
         if isinstance(v, str):
-            return [o.strip() for o in v.split(",") if o.strip()]
+            return [o.strip().rstrip("/") for o in v.split(",") if o.strip()]
+        if isinstance(v, list):
+            return [o.rstrip("/") for o in v]
         return v
 
     model_config = {"env_file": str(ENV_FILE), "extra": "ignore"}
@@ -52,6 +57,7 @@ def validate_startup():
     print("\n── NaijaFinAI Startup Check ──────────────────")
     print(f"  .env path       : {ENV_FILE}")
     print(f"  Default provider: {settings.default_llm_provider}")
+    print(f"  CORS origins    : {settings.cors_origins}")
     keys = {
         "groq":      settings.groq_api_key,
         "openai":    settings.openai_api_key,
@@ -64,7 +70,7 @@ def validate_startup():
     active = keys.get(settings.default_llm_provider, "")
     if not active:
         print(f"\n  ❌ ERROR: DEFAULT_LLM_PROVIDER='{settings.default_llm_provider}' but key is empty!")
-        print(f"     → Set {settings.default_llm_provider.upper()}_API_KEY in your .env\n")
+        print(f"     → Set {settings.default_llm_provider.upper()}_API_KEY in Railway environment variables\n")
     else:
-        print(f"\n  ✅ Ready — using {settings.default_llm_provider.upper()} / {getattr(settings, settings.default_llm_provider + '_model')}\n")
+        print(f"\n  ✅ Ready — {settings.default_llm_provider.upper()} / {getattr(settings, settings.default_llm_provider + '_model')}\n")
     print("──────────────────────────────────────────────\n")

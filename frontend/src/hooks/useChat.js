@@ -22,14 +22,18 @@ export function useChat(provider) {
     const userMsg = { role: "user", content: text, timestamp: new Date() };
     const history = messages.map(({ role, content }) => ({ role, content }));
 
-    setMessages(prev => [...prev, userMsg, { role: "assistant", content: "", timestamp: new Date(), streaming: true }]);
+    setMessages(prev => [
+      ...prev,
+      userMsg,
+      { role: "assistant", content: "", timestamp: new Date(), streaming: true },
+    ]);
 
     let buf = "";
     try {
       await streamChat({
         message: text,
         history,
-        provider,
+        provider: provider || "groq",
         onLanguage: (lang) => setLanguage(lang),
         onToken: (tok) => {
           buf += tok;
@@ -43,15 +47,34 @@ export function useChat(provider) {
         onDone: (d) => {
           setMessages(prev => {
             const next = [...prev];
-            next[next.length - 1] = { ...next[next.length - 1], streaming: false, audit_id: d?.audit_id };
+            next[next.length - 1] = {
+              ...next[next.length - 1],
+              streaming: false,
+              audit_id: d?.audit_id,
+            };
             return next;
           });
         },
       });
-    } catch {
+    } catch (err) {
+      // Show the actual error so it's easier to debug
+      const errMsg = err?.message?.includes("API 5")
+        ? "Backend error — Railway may be sleeping. Try again in 30 seconds."
+        : err?.message?.includes("API 4")
+        ? "Request rejected — check CORS settings on Railway."
+        : err?.message?.includes("Failed to fetch") || err?.message?.includes("NetworkError")
+        ? "Cannot reach backend. Check Railway is running at the correct URL."
+        : `Error: ${err?.message || "Unknown error"}`;
+
       setMessages(prev => {
         const next = [...prev];
-        next[next.length - 1] = { role: "assistant", content: "Error connecting to agent. Check your API keys.", streaming: false, error: true, timestamp: new Date() };
+        next[next.length - 1] = {
+          role: "assistant",
+          content: errMsg,
+          streaming: false,
+          error: true,
+          timestamp: new Date(),
+        };
         return next;
       });
     } finally {
