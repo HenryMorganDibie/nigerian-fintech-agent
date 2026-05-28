@@ -25,7 +25,7 @@ jobs:
           npm install
           npm run build
         env:
-          VITE_API_URL: https://nigerian-fintech-agent-production.up.railway.app/
+          VITE_API_URL: https://nigerian-fintech-agent-production.up.railway.app
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
