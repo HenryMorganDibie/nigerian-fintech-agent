@@ -1,38 +1,45 @@
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from langchain.agents import AgentExecutor, create_tool_calling_agent
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+"""
+NaijaFinAI Agent — LangChain 1.x compatible
+Uses bind_tools + manual tool-call loop (no AgentExecutor needed).
+Works on LangChain >=0.3 and 1.x.
+"""
+
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
 from app.core.llm_factory import get_llm
 from app.core.prompts import BASE_SYSTEM_PROMPT
 from app.core.language import detect_language, LANGUAGE_INSTRUCTIONS, enrich_context_with_glossary
 from app.core.compliance import AuditLogEntry
-from app.tools.fintech_tools import AGENT_TOOLS
+from app.tools.fintech_tools import AGENT_TOOLS, nigerian_fraud_score, cbn_loan_eligibility, naija_spending_insights
 from app.models.schemas import ChatMessage
 from app.core.config import settings
 from datetime import datetime, timezone, timedelta
 from typing import AsyncGenerator
-import json, hashlib, uuid
+import json, uuid
+
+# Tool name -> callable map
+TOOL_MAP = {
+    "nigerian_fraud_score":   nigerian_fraud_score,
+    "cbn_loan_eligibility":   cbn_loan_eligibility,
+    "naija_spending_insights": naija_spending_insights,
+}
 
 
-def _make_audit(provider: str, event: str = "chat_interaction") -> AuditLogEntry:
-    retention = (datetime.now(timezone.utc) + timedelta(days=365 * 5)).isoformat()
+def _make_audit(provider: str) -> AuditLogEntry:
     return AuditLogEntry(
-        event_type=event,
+        event_type="chat_interaction",
         llm_provider=provider,
-        data_retention_expires=retention,
+        data_retention_expires=(
+            datetime.now(timezone.utc) + timedelta(days=365 * 5)
+        ).isoformat(),
     )
 
 
-def _build_prompt(language: str) -> ChatPromptTemplate:
+def _build_system(language: str) -> str:
     lang_instruction = LANGUAGE_INSTRUCTIONS.get(language, "")
     system = BASE_SYSTEM_PROMPT
     if lang_instruction:
         system += f"\n\n## Language Instruction\n{lang_instruction}"
-    return ChatPromptTemplate.from_messages([
-        ("system", system),
-        MessagesPlaceholder("chat_history"),
-        ("human", "{input}"),
-        MessagesPlaceholder("agent_scratchpad"),
-    ])
+    return system
 
 
 def _to_lc_history(history: list[ChatMessage]) -> list:
@@ -50,29 +57,52 @@ def run_agent(
     history: list[ChatMessage],
     provider: str | None = None,
 ) -> tuple[str, str, list[str], str, str]:
-    """Returns (reply, provider_used, tool_calls, language, audit_id)"""
+    """Returns (reply, provider, tool_calls, language, audit_id)"""
     provider = provider or settings.default_llm_provider
     language = detect_language(message)
     enriched = enrich_context_with_glossary(message)
-
-    llm = get_llm(provider=provider)
-    prompt = _build_prompt(language)
     audit = _make_audit(provider)
 
-    agent = create_tool_calling_agent(llm, AGENT_TOOLS, prompt)
-    executor = AgentExecutor(
-        agent=agent, tools=AGENT_TOOLS,
-        verbose=False, return_intermediate_steps=True,
-        max_iterations=5, handle_parsing_errors=True,
-    )
+    llm = get_llm(provider=provider)
+    llm_with_tools = llm.bind_tools(AGENT_TOOLS)
 
-    result = executor.invoke({"input": enriched, "chat_history": _to_lc_history(history)})
-    reply = result.get("output", "I encountered an issue. Please try again.")
-    tool_calls = [
-        step[0].tool for step in result.get("intermediate_steps", [])
-        if hasattr(step[0], "tool")
+    messages = [
+        SystemMessage(content=_build_system(language)),
+        *_to_lc_history(history),
+        HumanMessage(content=enriched),
     ]
-    return reply, provider, tool_calls, language, audit.audit_id
+
+    tool_calls_made = []
+
+    # Tool-call loop — max 5 iterations
+    for _ in range(5):
+        response = llm_with_tools.invoke(messages)
+        messages.append(response)
+
+        # No tool calls — we have the final answer
+        if not getattr(response, "tool_calls", None):
+            break
+
+        # Execute each tool call
+        for tc in response.tool_calls:
+            tool_name = tc["name"]
+            tool_args = tc["args"]
+            tool_id   = tc.get("id", str(uuid.uuid4()))
+            tool_calls_made.append(tool_name)
+
+            tool_fn = TOOL_MAP.get(tool_name)
+            if tool_fn:
+                try:
+                    result = tool_fn.invoke(tool_args)
+                except Exception as e:
+                    result = json.dumps({"error": str(e)})
+            else:
+                result = json.dumps({"error": f"Unknown tool: {tool_name}"})
+
+            messages.append(ToolMessage(content=str(result), tool_call_id=tool_id))
+
+    reply = response.content if hasattr(response, "content") else "I encountered an issue. Please try again."
+    return reply, provider, tool_calls_made, language, audit.audit_id
 
 
 async def run_agent_stream(
@@ -85,7 +115,12 @@ async def run_agent_stream(
 
     yield f"data: {json.dumps({'type': 'language', 'language': language})}\n\n"
 
-    reply, _, tool_calls, _, audit_id = run_agent(message, history, provider)
+    try:
+        reply, _, tool_calls, _, audit_id = run_agent(message, history, provider)
+    except Exception as e:
+        yield f"data: {json.dumps({'type': 'token', 'content': f'Error: {str(e)}'})}\n\n"
+        yield f"data: {json.dumps({'type': 'done', 'provider': provider, 'audit_id': ''})}\n\n"
+        return
 
     if tool_calls:
         yield f"data: {json.dumps({'type': 'tool_calls', 'tools': tool_calls})}\n\n"
