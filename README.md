@@ -1,11 +1,10 @@
 # 🇳🇬 NaijaFinAI — Production AI Agent for Nigerian Fintechs
 
 > **The only AI fraud intelligence platform built natively for the Nigerian payments ecosystem.**
-> Not a global tool with a Nigerian skin — built from the ground up for CBN regulations, NFIU filing deadlines, Nigerian fraud typologies, and all five Nigerian languages.
 
 [![Live Demo](https://img.shields.io/badge/Live_Demo-GitHub_Pages-00E676?style=flat-square&logo=github)](https://henrymorgandibie.github.io/nigerian-fintech-agent)
-[![FastAPI](https://img.shields.io/badge/Backend-FastAPI_3.0-009688?style=flat-square)](https://fastapi.tiangolo.com)
-[![Groq](https://img.shields.io/badge/LLM-Groq_Free_Tier-8B5CF6?style=flat-square)](https://console.groq.com)
+[![Backend](https://img.shields.io/badge/Backend-Railway-8B5CF6?style=flat-square)](https://nigerian-fintech-agent-production.up.railway.app/docs)
+[![Groq](https://img.shields.io/badge/LLM-Groq_Free-00E676?style=flat-square)](https://console.groq.com)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 ---
@@ -18,11 +17,11 @@
 | Scoring model | Additive rules | **Bayesian log-odds aggregation** — calibrated probabilities |
 | Regulatory output | None | NFIU STR/CTR deadlines, EFCC referral thresholds, exact form links |
 | Languages | English only | English + Pidgin + Yoruba + Hausa + Igbo with financial glossary |
-| Voice input | None | Groq Whisper — free, Nigerian-language aware |
-| Compliance | No audit trail | NDPA 2023 §40 audit logs, PII scrubbing, 5-year retention |
-| Eval harness | None | **Precision/recall/F1 per signal + confusion matrix dashboard** |
-| Workflow demos | None | **3 one-click fintech scenarios** (loan fraud, agent monitoring, chargeback) |
-| Case output | None | Structured: risk score, top-3 signals, regulatory action, audit ID |
+| Voice input | None | Groq Whisper (free) — all Nigerian languages |
+| Compliance | None | NDPA 2023 §40 audit logs, PII scrubbing, 5-year retention |
+| Eval harness | None | Precision/recall/F1 per signal + confusion matrix dashboard |
+| Workflow demos | None | 3 one-click fintech scenarios (loan fraud, agent monitoring, chargeback) |
+| Case output | None | Risk score + top-3 signals + regulatory action + audit ID |
 
 ---
 
@@ -31,47 +30,48 @@
 ```
 nigerian-fintech-agent/
 │
-├── backend/                            FastAPI + LangChain
+├── backend/                              FastAPI + LangChain + Groq
 │   └── app/
 │       ├── core/
-│       │   ├── nigeria_intelligence.py  13 Nigerian fraud signals + CBN refs
-│       │   ├── bayesian_scorer.py       ← NEW: Bayesian log-odds risk scoring
-│       │   ├── evaluation.py            ← NEW: 40-sample synthetic eval harness
-│       │   ├── workflows.py             ← NEW: 3 one-click fintech scenarios
-│       │   ├── compliance.py            NDPA audit logs + NFIU filing tracker
-│       │   ├── language.py              Pidgin/Yoruba/Hausa/Igbo detection
-│       │   ├── llm_factory.py           Multi-provider LLM (Groq default)
-│       │   ├── prompts.py               Nigeria-specialised system prompts
-│       │   └── config.py                Groq-first settings + startup validator
-│       ├── tools/
-│       │   └── fintech_tools.py         3 LangChain tools (fraud, loans, insights)
-│       ├── agents/
-│       │   └── fintech_agent.py         Orchestrator + streaming + audit
+│       │   ├── nigeria_intelligence.py   13 Nigerian fraud signals + CBN refs
+│       │   ├── bayesian_scorer.py        Bayesian log-odds risk scoring
+│       │   ├── evaluation.py             40-sample synthetic eval harness
+│       │   ├── workflows.py              3 one-click fintech scenarios
+│       │   ├── compliance.py             NDPA audit logs + NFIU filing tracker
+│       │   ├── language.py               Pidgin/Yoruba/Hausa/Igbo detection
+│       │   ├── llm_factory.py            Multi-provider LLM (Groq default)
+│       │   ├── prompts.py                Nigeria-specialised system prompts
+│       │   └── config.py                 Groq-first + startup validator
+│       ├── tools/fintech_tools.py        3 LangChain agent tools
+│       ├── agents/fintech_agent.py       Orchestrator + SSE streaming + audit
 │       └── routers/
-│           ├── chat.py                  POST /api/chat (SSE streaming)
-│           ├── fraud.py                 POST /api/fraud/analyze → CaseOutput
-│           ├── loans.py                 POST /api/loans/eligibility
-│           ├── transactions.py          POST /api/transactions/insights
-│           ├── eval.py                  ← NEW: POST /api/eval/run
-│           ├── workflows.py             ← NEW: POST /api/workflows/run
-│           └── media.py                 ← NEW: POST /api/media/voice + /upload
+│           ├── chat.py                   POST /api/chat
+│           ├── fraud.py                  POST /api/fraud/analyze → CaseOutput
+│           ├── loans.py                  POST /api/loans/eligibility
+│           ├── transactions.py           POST /api/transactions/insights
+│           ├── eval.py                   POST /api/eval/run
+│           ├── workflows.py              POST /api/workflows/run
+│           └── media.py                  POST /api/media/voice + /upload
 │
-├── frontend/                           React 18 + Vite + Tailwind
+├── frontend/                             React 18 + Vite + Tailwind
 │   └── src/
-│       ├── App.jsx                      4-tab layout (Chat/Workflows/Eval/Voice)
+│       ├── App.jsx                       4-tab layout
 │       ├── components/
-│       │   ├── ChatMessage.jsx          Risk-coloured bubbles + audit IDs
-│       │   ├── Sidebar.jsx              Provider selector + quick scenarios
-│       │   ├── ToolCallBanner.jsx       Shows tools invoked
-│       │   ├── EvalDashboard.jsx        ← NEW: Precision/recall/confusion matrix
-│       │   ├── WorkflowDemo.jsx         ← NEW: One-click scenario runner
-│       │   └── MediaInput.jsx           ← NEW: Voice recorder + file upload
-│       ├── hooks/useChat.js             Streaming chat state
-│       └── utils/api.js                 Full API client
+│       │   ├── ChatMessage.jsx           Risk-coloured bubbles + audit IDs
+│       │   ├── Sidebar.jsx               Provider selector + quick scenarios
+│       │   ├── ToolCallBanner.jsx        Live tool invocation display
+│       │   ├── EvalDashboard.jsx         Precision/recall/confusion matrix
+│       │   ├── WorkflowDemo.jsx          One-click scenario runner
+│       │   └── MediaInput.jsx            Voice recorder + file upload
+│       ├── hooks/useChat.js              Streaming chat state
+│       └── utils/
+│           ├── api.js                    Full API client
+│           └── health.js                 Backend health check
 │
-├── .github/workflows/deploy.yml        ← NEW: Auto-deploy to GitHub Pages
-├── docker-compose.yml
-└── .env.example                        Groq-first, annotated
+├── .github/workflows/deploy.yml          Auto-deploy frontend to GitHub Pages
+├── backend/Dockerfile                    Railway deployment
+├── docker-compose.yml                    Local full-stack
+└── .env.example                          Groq-first, annotated
 ```
 
 ---
@@ -80,26 +80,24 @@ nigerian-fintech-agent/
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/chat` | Multi-turn agent (SSE streaming, all 5 languages) |
+| `POST` | `/api/chat` | Multi-turn streaming agent (SSE, all 5 Nigerian languages) |
 | `POST` | `/api/fraud/analyze` | Bayesian fraud analysis → structured CaseOutput |
 | `POST` | `/api/loans/eligibility` | CBN-compliant loan assessment |
 | `POST` | `/api/transactions/insights` | Nigerian spending analytics |
-| `POST` | `/api/eval/run` | Run evaluation harness on synthetic dataset |
-| `GET`  | `/api/eval/dataset` | View the 40-sample labelled dataset |
+| `POST` | `/api/eval/run` | Precision/recall/F1 on 40-sample synthetic dataset |
+| `GET`  | `/api/eval/dataset` | View labelled fraud dataset |
 | `GET`  | `/api/workflows/scenarios` | List available demo scenarios |
-| `POST` | `/api/workflows/run` | Run a workflow scenario end-to-end |
-| `POST` | `/api/media/voice` | Transcribe audio (Groq Whisper, all Nigerian languages) |
+| `POST` | `/api/workflows/run` | Run end-to-end workflow scenario |
+| `POST` | `/api/media/voice` | Transcribe audio via Groq Whisper (free) |
 | `POST` | `/api/media/upload` | Upload PDF/image/CSV for fraud scan |
 | `GET`  | `/api/providers` | List configured LLM providers |
 | `GET`  | `/api/health` | Health check |
 
-Interactive docs: `http://localhost:8000/docs`
+Interactive docs: `https://nigerian-fintech-agent-production.up.railway.app/docs`
 
 ---
 
 ## Nigerian Fraud Intelligence — 13 Signals
-
-Each signal has a **CBN/EFCC/NFIU regulatory citation**, **Bayesian likelihood ratio**, and **recommended action**:
 
 | Signal | Likelihood Ratio | Severity | Regulation |
 |---|---|---|---|
@@ -134,51 +132,40 @@ cp .env.example .env
 cd backend
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
-# Terminal shows startup check — confirms which providers are ready
 
 # 4. Frontend (new terminal)
-cd frontend
-npm install
-npm run dev
+cd frontend && npm install && npm run dev
 # Open http://localhost:5173
 ```
 
 ---
 
-## Frontend: 4 Tabs
+## Deployment
 
-### 1. Chat
-Multi-turn agent in any Nigerian language. Detects Pidgin, Yoruba, Hausa, Igbo automatically and responds in kind. Audit ID shown per message. Tools invoked shown in banner.
+### Backend — Railway
+1. Connect repo to Railway
+2. Set root directory to `backend/`
+3. Add environment variables:
+   ```
+   GROQ_API_KEY=gsk_...
+   DEFAULT_LLM_PROVIDER=groq
+   CORS_ORIGINS=https://henrymorgandibie.github.io,http://localhost:5173
+   ```
 
-### 2. Workflows
-One-click end-to-end scenarios:
-- **Loan Application Fraud Check** — KYC → eligibility → post-disbursement monitoring → STR filing
-- **Agent Wallet Monitoring** — terminal baseline → velocity spike → mule chain detection → suspension
-- **Chargeback Investigation** — dispute intake → SIM/device analysis → CBN dispute timeline
-
-### 3. Eval Dashboard
-Runs the Bayesian scorer against 40 synthetic Nigerian fraud transactions. Shows overall precision/recall/F1, confusion matrix, and per-signal breakdown. Validates the model against ground truth.
-
-### 4. Voice & Files
-- **Voice**: Record in any Nigerian language — transcribed by Groq Whisper (free), language auto-detected, transcript sent to chat agent
-- **Files**: Upload PDF, image, CSV — text extracted, scanned for Nigerian fraud signals, risk level returned
+### Frontend — GitHub Pages
+Auto-deploys on every push to `main` via GitHub Actions.
+Live at: **https://henrymorgandibie.github.io/nigerian-fintech-agent**
 
 ---
 
-## Deploying to GitHub Pages
+## Frontend Tabs
 
-The frontend auto-deploys on every push to `main` via GitHub Actions (`.github/workflows/deploy.yml`).
-
-To deploy manually:
-```bash
-cd frontend
-npm install
-npm run deploy
-```
-
-Live at: **https://henrymorgandibie.github.io/nigerian-fintech-agent**
-
-> **Note:** The live demo connects to a hosted backend. For full functionality, deploy the backend to [Render](https://render.com) or [Railway](https://railway.app) (both have free tiers) and update `VITE_API_URL` in the workflow file.
+| Tab | Description |
+|---|---|
+| **Chat** | Multi-turn agent — auto-detects Pidgin, Yoruba, Hausa, Igbo, English |
+| **Workflows** | One-click: Loan Fraud Check, Agent Wallet Monitor, Chargeback Investigation |
+| **Eval** | Live precision/recall/F1 + confusion matrix on 40-sample Nigerian fraud dataset |
+| **Voice & Files** | Groq Whisper transcription + PDF/CSV/image fraud scan |
 
 ---
 
@@ -187,9 +174,9 @@ Live at: **https://henrymorgandibie.github.io/nigerian-fintech-agent**
 | Requirement | Implementation |
 |---|---|
 | NDPA 2023 §40 — Automated decision audit | UUID audit log on every AI decision |
-| NDPA 2023 §24 — Data minimisation | PII scrubbed before LLM API calls |
+| NDPA 2023 §24 — Data minimisation | PII scrubbed before any LLM API call |
 | CBN AML/CFT 2022 §10 — Record retention | 5-year expiry stamped at creation |
-| NFIU STR — 24-hour filing deadline | Regulatory filing tracker per case |
+| NFIU STR — 24h filing deadline | Auto-triggered on high/critical risk |
 | NFIU CTR — 7-day filing for >₦5M | Auto-triggered on large transactions |
 | EFCC referral — Critical + >₦5M | Escalation path in every critical case |
 
@@ -199,14 +186,13 @@ Live at: **https://henrymorgandibie.github.io/nigerian-fintech-agent**
 
 - [ ] NIBSS BVN API live validation
 - [ ] WhatsApp Business API channel
-- [ ] Persistent audit store (PostgreSQL append-only)
+- [ ] Persistent audit store (PostgreSQL)
 - [ ] CBN sandbox certification
-- [ ] Fine-tuned fraud model on Nigerian transaction data
-- [ ] Multi-tenant API with per-fintech configuration
+- [ ] Fine-tuned model on Nigerian transaction data
 
 ---
 
 ## Author
 
-**Henry Dibie** — ML/Data Engineer  
+**Henry Dibie** — ML/Data Engineer
 [LinkedIn](https://linkedin.com/in/kinghenrymorgan) · [GitHub](https://github.com/HenryMorganDibie) · [Medium](https://medium.com/@KingHenryMorgan) · [X](https://twitter.com/KingHenryMorgan)

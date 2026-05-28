@@ -1,3 +1,4 @@
+# ── Core API ──────────────────────────────────────────────────
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
@@ -7,18 +8,20 @@ httpx==0.27.2
 sse-starlette==2.1.3
 python-multipart==0.0.12
 tenacity==8.5.0
-pdfplumber==0.11.4
 
-# LLM providers — Groq is primary (free)
+# ── Primary LLM: Groq (free, fast, small package) ────────────
 groq>=0.11.0
+
+# ── Optional providers (only used if API key is set) ─────────
 openai>=1.51.0
 anthropic>=0.34.2
-google-generativeai>=0.7.0,<0.8.0
 
-# LangChain — flexible ranges, let pip resolve
-langchain>=0.3
+# ── LangChain — only what's actually imported ─────────────────
 langchain-core>=0.3
+langchain>=0.3
 langchain-groq>=0.2
 langchain-openai>=0.2
 langchain-anthropic>=0.2
-langchain-google-genai>=1.0,<2.0
+
+# ── File parsing (lazy-loaded, small) ────────────────────────
+pypdf>=4.0.0
