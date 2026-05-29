@@ -5,7 +5,7 @@ Works on LangChain >=0.3 and 1.x.
 """
 
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
-from app.core.llm_factory import get_llm
+from app.core.llm_factory import get_llm, get_llm_with_fallback
 from app.core.prompts import BASE_SYSTEM_PROMPT
 from app.core.language import detect_language, LANGUAGE_INSTRUCTIONS, enrich_context_with_glossary
 from app.core.compliance import AuditLogEntry
@@ -63,7 +63,7 @@ def run_agent(
     enriched = enrich_context_with_glossary(message)
     audit = _make_audit(provider)
 
-    llm = get_llm(provider=provider)
+    llm = get_llm_with_fallback(provider=provider)
     llm_with_tools = llm.bind_tools(AGENT_TOOLS)
 
     messages = [
