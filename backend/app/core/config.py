@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # ── Groq — primary + fallback (both free) ──────────────────────────────
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
-    groq_fallback_model: str = "llama3-70b-8192"   # fallback when primary hits rate limit
+    groq_fallback_model: str = "llama-3.1-8b-instant"   # fallback when primary hits rate limit
 
     # ── Optional providers ─────────────────────────────────────────────────
     openai_api_key: str = ""

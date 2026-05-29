@@ -39,7 +39,7 @@ export function Sidebar({ provider, setProvider, language, onPrompt }) {
           </div>
           <div>
             <div style={{ fontFamily: "Syne", fontWeight: 700, fontSize: 16, color: "var(--white)", letterSpacing: "-0.3px" }}>NaijaFinAI</div>
-            <div style={{ fontSize: 10, color: "var(--muted)" }}>v2.0 · Nigeria-native</div>
+            <div style={{ fontSize: 10, color: "var(--muted)" }}>v3.0 · Nigeria-native</div>
           </div>
         </div>
         {/* Language badge */}

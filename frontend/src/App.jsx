@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Trash2, MessageSquare, BarChart2, Zap, Mic, AlertTriangle, CheckCircle } from "lucide-react";
+import { Send, Trash2, MessageSquare, BarChart2, Zap, Mic, AlertTriangle, CheckCircle, Activity } from "lucide-react";
 import { useChat } from "./hooks/useChat";
 import { ChatMessage } from "./components/ChatMessage";
 import { Sidebar } from "./components/Sidebar";
@@ -7,6 +7,7 @@ import { ToolCallBanner } from "./components/ToolCallBanner";
 import { EvalDashboard } from "./components/EvalDashboard";
 import { WorkflowDemo } from "./components/WorkflowDemo";
 import { MediaInput } from "./components/MediaInput";
+import { MonitoringDashboard } from "./components/MonitoringDashboard";
 import { checkBackendHealth } from "./utils/health";
 
 const TABS = [
@@ -14,6 +15,7 @@ const TABS = [
   { id: "workflows", label: "Workflows",    Icon: Zap },
   { id: "eval",      label: "Eval",         Icon: BarChart2 },
   { id: "voice",     label: "Voice & Files",Icon: Mic },
+  { id: "monitor",  label: "Monitor",       Icon: Activity },
 ];
 
 export default function App() {
@@ -122,6 +124,7 @@ export default function App() {
           {tab === "workflows" && <div style={{ height: "100%", overflowY: "auto" }}><WorkflowDemo provider={provider} /></div>}
           {tab === "eval"      && <div style={{ height: "100%", overflowY: "auto" }}><EvalDashboard provider={provider} /></div>}
           {tab === "voice"     && <div style={{ height: "100%", overflowY: "auto" }}><MediaInput provider={provider} onTranscript={(t) => { setInput(t); setTab("chat"); }} /></div>}
+          {tab === "monitor"   && <div style={{ height: "100%", overflowY: "auto" }}><MonitoringDashboard /></div>}
         </div>
       </div>
     </div>
