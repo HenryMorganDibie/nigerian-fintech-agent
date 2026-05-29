@@ -1,13 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings, get_available_providers, validate_startup
-from app.routers import chat, fraud, loans, transactions, eval, workflows, media
+from app.routers import chat, fraud, loans, transactions, eval, workflows, media, ab_testing
 
 validate_startup()
 
 app = FastAPI(
     title="NaijaFinAI Agent API",
-    description="Production-grade AI agent for Nigerian fintechs.",
+    description="Production-grade AI agent for Nigerian fintechs — 7-layer fraud intelligence, CBN compliance, A/B testing, drift monitoring.",
     version="3.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -16,7 +16,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_origin_regex=r"https://.*\.github\.io",  # covers all GitHub Pages
+    allow_origin_regex=r"https://.*\.github\.io",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -29,6 +29,7 @@ app.include_router(transactions.router)
 app.include_router(eval.router)
 app.include_router(workflows.router)
 app.include_router(media.router)
+app.include_router(ab_testing.router)
 
 
 @app.get("/api/health")
@@ -38,7 +39,4 @@ async def health():
 
 @app.get("/api/providers")
 async def providers():
-    return {
-        "providers": get_available_providers(),
-        "default": settings.default_llm_provider,
-    }
+    return {"providers": get_available_providers(), "default": settings.default_llm_provider}
