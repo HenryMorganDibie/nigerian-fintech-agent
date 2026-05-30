@@ -1,150 +1,250 @@
+"""
+NaijaFinAI Agent Tools
+========================
+Tools the LLM can call via bind_tools().
+
+CRITICAL DESIGN PRINCIPLE:
+  - Fraud scoring runs on the Bayesian/heuristic engine — NO LLM in the decision path
+  - LLM is presentation layer only (narrative explanation)
+  - All tool parameters have safe defaults so LLM never passes "unknown"
+  - Type coercion handles LLM passing strings instead of ints/bools
+"""
+
 from langchain_core.tools import tool
 from app.core.nigeria_intelligence import evaluate_transaction
+from app.core.bayesian_scorer import bayesian_fraud_score
+from typing import Optional
 import json
+
+
+def _bool(v, default: bool = False) -> bool:
+    """Coerce any LLM value to bool safely."""
+    if isinstance(v, bool): return v
+    if isinstance(v, str): return v.lower() in ("true", "yes", "1")
+    if isinstance(v, (int, float)): return bool(v)
+    return default
+
+
+def _int(v, default: int = 0) -> int:
+    """Coerce any LLM value to int safely."""
+    if isinstance(v, int): return v
+    try: return int(float(str(v)))
+    except: return default
+
+
+def _float(v, default: float = 0.0) -> float:
+    """Coerce any LLM value to float safely."""
+    if isinstance(v, (int, float)): return float(v)
+    try: return float(str(v))
+    except: return default
 
 
 @tool
 def nigerian_fraud_score(
     amount: float,
-    channel: str,
-    hour_of_day: int,
-    day_of_week: int,
-    is_new_recipient: bool,
-    is_new_device: bool,
-    device_changed_hours_ago: int,
-    sim_replaced_hours_ago: int,
-    transactions_last_hour: int,
-    bvn_verified: bool,
-    nin_bvn_match: bool,
-    narration: str,
-    is_post_loan_disbursement: bool,
-    is_agent_terminal: bool,
-    agent_tx_count_last_hour: int,
-    is_pos: bool,
-    recent_outbound_ngn: float,
-    recent_inbound_from_same_ngn: float,
+    channel: str = "transfer",
+    hour_of_day: int = 12,
+    day_of_week: int = 1,
+    is_new_recipient: bool = False,
+    is_new_device: bool = False,
+    device_changed_hours_ago: Optional[int] = None,
+    sim_replaced_hours_ago: Optional[int] = None,
+    transactions_last_hour: int = 0,
+    bvn_verified: bool = True,
+    nin_bvn_match: bool = True,
+    narration: str = "",
+    is_post_loan_disbursement: bool = False,
+    is_agent_terminal: bool = False,
+    agent_tx_count_last_hour: int = 0,
+    is_pos: bool = False,
+    recent_outbound_ngn: float = 0.0,
+    recent_inbound_from_same_ngn: float = 0.0,
 ) -> str:
     """
-    Score a Nigerian fintech transaction using local fraud intelligence signals.
-    References CBN circulars, EFCC advisories, and NFIU guidelines.
-    Returns risk score, triggered signals, CBN references, and recommended action.
+    Score a Nigerian fintech transaction for fraud risk using CBN-cited signals and Bayesian scoring.
+    All unknown fields default to safe values — only provide what you actually know.
+
+    Args:
+        amount: Transaction amount in NGN (required)
+        channel: 'transfer', 'ussd', 'pos', 'mobile', 'web', 'agent' (default: transfer)
+        hour_of_day: Hour 0-23 (default: 12)
+        day_of_week: 0=Monday, 6=Sunday (default: 1)
+        is_new_recipient: True if recipient never received from this sender before
+        is_new_device: True if device fingerprint is new
+        device_changed_hours_ago: Hours since device change (None if unknown)
+        sim_replaced_hours_ago: Hours since SIM replacement (None if unknown)
+        transactions_last_hour: Count of transactions in last hour (default: 0)
+        bvn_verified: Whether BVN is verified (default: True — assume verified unless stated)
+        nin_bvn_match: Whether NIN and BVN match (default: True)
+        narration: Transaction description/narration
+        is_post_loan_disbursement: True if within 30 mins of loan disbursement
+        is_agent_terminal: True if OPay/Moniepoint agent terminal
+        agent_tx_count_last_hour: Agent transactions in last hour
+        is_pos: True if POS transaction
+        recent_outbound_ngn: Total outbound in last 24h from same account
+        recent_inbound_from_same_ngn: Total inbound from same source in last 24h
     """
-    result = evaluate_transaction(
-        amount=amount, channel=channel, hour_of_day=hour_of_day,
-        day_of_week=day_of_week, is_new_recipient=is_new_recipient,
-        is_new_device=is_new_device, device_changed_hours_ago=device_changed_hours_ago,
-        sim_replaced_hours_ago=sim_replaced_hours_ago,
-        transactions_last_hour=transactions_last_hour,
-        bvn_verified=bvn_verified, nin_bvn_match=nin_bvn_match,
-        narration=narration, is_post_loan_disbursement=is_post_loan_disbursement,
-        is_agent_terminal=is_agent_terminal,
-        agent_tx_count_last_hour=agent_tx_count_last_hour,
-        is_pos=is_pos, recent_outbound_ngn=recent_outbound_ngn,
-        recent_inbound_from_same_ngn=recent_inbound_from_same_ngn,
+    # Type-coerce everything — LLM sometimes passes strings
+    safe_hour    = _int(hour_of_day, 12)
+    safe_dow     = _int(day_of_week, 1)
+    safe_txlh    = _int(transactions_last_hour, 0)
+    safe_agtx    = _int(agent_tx_count_last_hour, 0)
+    safe_dcha    = _int(device_changed_hours_ago, None) if device_changed_hours_ago is not None else None
+    safe_simra   = _int(sim_replaced_hours_ago, None) if sim_replaced_hours_ago is not None else None
+    safe_bvn     = _bool(bvn_verified, True)
+    safe_nin     = _bool(nin_bvn_match, True)
+    safe_newrec  = _bool(is_new_recipient, False)
+    safe_newdev  = _bool(is_new_device, False)
+    safe_loan    = _bool(is_post_loan_disbursement, False)
+    safe_agent   = _bool(is_agent_terminal, False)
+    safe_pos     = _bool(is_pos, False)
+    safe_out     = _float(recent_outbound_ngn, 0.0)
+    safe_in      = _float(recent_inbound_from_same_ngn, 0.0)
+    safe_amount  = _float(amount, 0.0)
+
+    # Run heuristic engine
+    heuristic = evaluate_transaction(
+        amount=safe_amount, channel=str(channel),
+        hour_of_day=safe_hour, day_of_week=safe_dow,
+        is_new_recipient=safe_newrec, is_new_device=safe_newdev,
+        device_changed_hours_ago=safe_dcha,
+        sim_replaced_hours_ago=safe_simra,
+        transactions_last_hour=safe_txlh,
+        bvn_verified=safe_bvn, nin_bvn_match=safe_nin,
+        narration=str(narration),
+        is_post_loan_disbursement=safe_loan,
+        is_agent_terminal=safe_agent,
+        agent_tx_count_last_hour=safe_agtx,
+        is_pos=safe_pos,
+        recent_outbound_ngn=safe_out,
+        recent_inbound_from_same_ngn=safe_in,
     )
-    return json.dumps(result.to_dict())
+
+    # Bayesian scoring on top
+    triggered = [s.name for s in heuristic.triggered_signals]
+    bayes = bayesian_fraud_score(triggered)
+
+    # Build explainability breakdown
+    signal_contributions = []
+    for sig in heuristic.triggered_signals:
+        bs = next((b for b in bayes.signal_contributions if b["signal"] == sig.name), None)
+        signal_contributions.append({
+            "signal": sig.name,
+            "severity": sig.severity,
+            "description": sig.description,
+            "score_contribution": bs["contribution"] if bs else sig.score_delta,
+            "cbn_reference": sig.cbn_reference,
+            "recommended_action": sig.recommended_action,
+        })
+
+    return json.dumps({
+        "risk_score": bayes.risk_score,
+        "posterior_fraud_probability": round(bayes.posterior_fraud_probability, 4),
+        "risk_level": bayes.risk_level,
+        "recommended_action": bayes.recommended_action,
+        "top_3_signals": bayes.top_3_signals,
+        "signal_contributions": signal_contributions,
+        "cbn_references": bayes.cbn_references,
+        "amount_ngn": f"₦{safe_amount:,.2f}",
+        "note": "Scoring performed by deterministic Bayesian engine — LLM not involved in risk calculation",
+    })
 
 
 @tool
 def cbn_loan_eligibility(
     monthly_income_ngn: float,
-    employment_status: str,
-    bvn_verified: bool,
-    nin_verified: bool,
-    account_tier: str,
-    credit_bureau_score: int,
-    existing_loan_count: int,
-    requested_amount_ngn: float,
-    tenor_months: int,
+    employment_status: str = "employed",
+    bvn_verified: bool = True,
+    nin_verified: bool = True,
+    account_tier: str = "tier2",
+    credit_bureau_score: int = 600,
+    existing_loan_count: int = 0,
+    requested_amount_ngn: float = 100000,
+    tenor_months: int = 6,
     loan_purpose: str = "",
 ) -> str:
     """
     Assess loan eligibility under CBN digital lending guidelines.
-    Applies CRC/FirstCentral score bands, DTI limits, and KYC tier restrictions.
-    Returns decision, approved amount, rate, repayment, and CBN references.
+    Only call this if the user has provided actual applicant data.
+    Do NOT guess values — use what the user explicitly stated.
     """
     eligible = True
     reasons = []
     warnings = []
     cbn_refs = []
 
-    # BVN — mandatory per CBN Circular BPS/DIR/2020/004
-    if not bvn_verified:
+    # Type coerce
+    income     = _float(monthly_income_ngn, 0)
+    score      = _int(credit_bureau_score, 600)
+    loans      = _int(existing_loan_count, 0)
+    amount     = _float(requested_amount_ngn, 100000)
+    tenor      = _int(tenor_months, 6)
+    bvn        = _bool(bvn_verified, True)
+    nin        = _bool(nin_verified, True)
+
+    if not bvn:
         eligible = False
-        reasons.append("BVN not verified — mandatory for all accounts (CBN Circular BPS/DIR/2020/004)")
+        reasons.append("BVN not verified — CBN Circular BPS/DIR/2020/004")
         cbn_refs.append("CBN Circular BPS/DIR/2020/004")
 
-    # NIN linkage — CBN Circular BPS/DIR/GEN/CIR/03/002
-    if not nin_verified:
+    if not nin:
         eligible = False
-        reasons.append("NIN not linked — required since March 2024 (CBN Circular BPS/DIR/GEN/CIR/03/002)")
+        reasons.append("NIN not linked — CBN Circular BPS/DIR/GEN/CIR/03/002")
         cbn_refs.append("CBN Circular BPS/DIR/GEN/CIR/03/002")
 
-    # Tier 1 accounts — very limited loan access
-    if account_tier == "tier1":
-        max_loan = 50_000
-        if requested_amount_ngn > max_loan:
-            eligible = False
-            reasons.append(f"Tier 1 accounts capped at ₦50,000 loans — upgrade KYC to Tier 2 (CBN KYC Framework 2023)")
-            cbn_refs.append("CBN KYC Framework 2023")
-
-    # Bureau score bands (CRC/FirstCentral)
-    if credit_bureau_score < 400:
+    if str(account_tier) == "tier1" and amount > 50_000:
         eligible = False
-        reasons.append(f"Credit bureau score {credit_bureau_score} is below minimum threshold of 400")
-    elif credit_bureau_score < 550:
-        warnings.append(f"Score {credit_bureau_score} is below-average — higher interest rate applies")
+        reasons.append("Tier 1 accounts capped at ₦50,000 loans")
+        cbn_refs.append("CBN KYC Framework 2023")
 
-    # Debt-to-Income: CBN Digital Lending Guidelines — max 33% DTI
-    monthly_repayment = requested_amount_ngn / tenor_months if tenor_months > 0 else requested_amount_ngn
-    dti = monthly_repayment / monthly_income_ngn if monthly_income_ngn > 0 else 1
+    if score < 400:
+        eligible = False
+        reasons.append(f"Bureau score {score} below minimum threshold of 400")
+    elif score < 550:
+        warnings.append(f"Below-average score {score} — higher rate applies")
+
+    monthly_repayment = amount / tenor if tenor > 0 else amount
+    dti = monthly_repayment / income if income > 0 else 1
     if dti > 0.33:
         eligible = False
-        reasons.append(f"DTI ratio {dti:.0%} exceeds CBN cap of 33% (CBN Digital Lending Guidelines 2023)")
+        reasons.append(f"DTI {dti:.0%} exceeds CBN 33% cap — CBN Digital Lending Guidelines 2023")
         cbn_refs.append("CBN Digital Lending Guidelines 2023")
 
-    # Employment
-    if employment_status == "unemployed":
+    if str(employment_status) == "unemployed":
         eligible = False
-        reasons.append("Unemployed applicants require collateral or guarantor (CBN MFB Guidelines)")
-        cbn_refs.append("CBN Microfinance Bank Regulatory Framework")
+        reasons.append("Unemployed — requires collateral or guarantor")
 
-    # Concurrent loans
-    if existing_loan_count >= 3:
+    if loans >= 3:
         eligible = False
-        reasons.append("Maximum 2 concurrent unsecured digital loans per CBN FCCPC guidelines")
+        reasons.append("Exceeds 2 concurrent loan limit — FCCPC Digital Money Lender Guidelines 2022")
         cbn_refs.append("FCCPC Digital Money Lender Guidelines 2022")
-    elif existing_loan_count == 2:
-        warnings.append("Customer has 2 active loans — stricter terms apply")
+    elif loans == 2:
+        warnings.append("2 active loans — stricter terms apply")
 
-    # Loan purpose flags
-    if any(kw in loan_purpose.lower() for kw in ["crypto", "forex", "bet", "gambling"]):
+    if any(kw in str(loan_purpose).lower() for kw in ["crypto", "forex", "bet", "gambling"]):
         eligible = False
         reasons.append("Loan purpose not eligible under CBN responsible lending guidelines")
 
-    # Calculate terms
     approved_amount = None
     monthly_rate = None
     repayment = None
-
-    if eligible:
-        max_eligible = min(monthly_income_ngn * 2, requested_amount_ngn)
-        approved_amount = max_eligible
+    if eligible and income > 0:
+        approved_amount = min(income * 2, amount)
         base_rate = 3.5
-        if credit_bureau_score < 550:
-            base_rate += 1.5
-        if employment_status == "self_employed":
-            base_rate += 0.5
+        if score < 550: base_rate += 1.5
+        if str(employment_status) == "self_employed": base_rate += 0.5
         monthly_rate = round(base_rate, 2)
-        repayment = round(approved_amount * (monthly_rate / 100) / (1 - (1 + monthly_rate / 100) ** -tenor_months), 2)
+        r = monthly_rate / 100
+        repayment = round(approved_amount * r / (1 - (1 + r) ** -tenor), 2) if tenor > 0 else approved_amount
 
     return json.dumps({
         "eligible": eligible,
         "decision": "APPROVED" if eligible else "DECLINED",
-        "approved_amount_ngn": approved_amount,
+        "approved_amount_ngn": f"₦{approved_amount:,.2f}" if approved_amount else None,
         "monthly_rate_pct": monthly_rate,
-        "estimated_monthly_repayment_ngn": repayment,
-        "tenor_months": tenor_months,
+        "estimated_monthly_repayment_ngn": f"₦{repayment:,.2f}" if repayment else None,
+        "tenor_months": tenor,
+        "debt_to_income_ratio": round(dti, 3),
         "reasons": reasons,
         "warnings": warnings,
         "cbn_references": list(set(cbn_refs)),
@@ -155,52 +255,61 @@ def cbn_loan_eligibility(
 def naija_spending_insights(
     total_debits_ngn: float,
     total_credits_ngn: float,
-    categories: dict,
-    period_days: int,
-    transaction_count: int,
+    categories: str = "{}",
+    period_days: int = 30,
+    transaction_count: int = 0,
 ) -> str:
     """
-    Generate spending insights calibrated for Nigerian economic context.
-    Accounts for inflation, fuel costs post-subsidy removal, local cost-of-living.
-    Returns savings rate, category breakdown, anomalies, and practical tips.
+    Generate spending insights for a Nigerian customer.
+    categories: JSON string like '{"food": 45000, "transport": 18000, "airtime": 12000}'
     """
-    net = total_credits_ngn - total_debits_ngn
-    savings_rate = (net / total_credits_ngn * 100) if total_credits_ngn > 0 else 0
-    daily_spend = total_debits_ngn / period_days if period_days > 0 else 0
+    import json as _json
+    debits  = _float(total_debits_ngn, 0)
+    credits = _float(total_credits_ngn, 0)
+    days    = _int(period_days, 30)
+    count   = _int(transaction_count, 0)
 
-    sorted_cats = sorted(categories.items(), key=lambda x: x[1], reverse=True)
-    top3 = sorted_cats[:3]
+    try:
+        cats = _json.loads(str(categories)) if isinstance(categories, str) else categories
+    except Exception:
+        cats = {}
+
+    net = credits - debits
+    savings_rate = (net / credits * 100) if credits > 0 else 0
+    daily_spend = debits / days if days > 0 else 0
+    sorted_cats = sorted(cats.items(), key=lambda x: x[1], reverse=True)[:3]
 
     tips = []
-    # Nigerian-specific tips
-    if categories.get("transport", 0) > total_debits_ngn * 0.20:
-        tips.append("Transport is over 20% of spend — consider a ride-sharing monthly plan or carpooling")
-    if categories.get("airtime", 0) + categories.get("data", 0) > 8000:
-        tips.append("High telecom spend — MTN/Airtel data bundles can save up to 40% vs pay-as-you-go")
     if savings_rate < 10:
-        tips.append(f"Savings rate is {savings_rate:.1f}% — target at least 20%. Lock ₦{daily_spend * 6:,.0f}/week in Piggyvest or Cowrywise")
+        tips.append(f"Savings rate {savings_rate:.1f}% is below 10% target — set aside ₦{daily_spend*6:,.0f}/week in Piggyvest or Cowrywise")
+    if cats.get("airtime", 0) + cats.get("data", 0) > 8000:
+        tips.append("High telecom spend — MTN/Airtel data bundles save 30–40% vs pay-as-you-go")
+    if cats.get("transport", 0) > debits * 0.20:
+        tips.append("Transport is >20% of spend — consider carpooling or a monthly ride plan")
     if savings_rate > 30:
-        tips.append("Excellent savings rate! Consider a dollar-denominated instrument (Risevest, Bamboo) to hedge against Naira depreciation")
-    if categories.get("food", 0) > total_debits_ngn * 0.35:
-        tips.append("Food is >35% of budget — bulk buying at Makro or Mile 12 market can reduce costs by 25–30%")
+        tips.append("Strong savings — consider Risevest or Bamboo dollar-denominated instruments to hedge Naira depreciation")
+    if cats.get("food", 0) > debits * 0.35:
+        tips.append("Food >35% of budget — bulk buying at Mile 12 or Makro can reduce costs 25–30%")
 
     anomalies = []
     if daily_spend > 50_000:
-        anomalies.append(f"Above-average daily spend of ₦{daily_spend:,.0f} — review discretionary items")
-    if categories.get("transfers", 0) > total_debits_ngn * 0.5:
+        anomalies.append(f"Above-average daily spend of ₦{daily_spend:,.0f}")
+    if cats.get("transfers", 0) > debits * 0.5:
         anomalies.append("More than half of outflows are peer transfers — verify no unauthorized transfers")
 
     return json.dumps({
-        "net_flow_ngn": round(net, 2),
+        "net_flow_ngn": f"₦{net:,.2f}",
         "savings_rate_pct": round(savings_rate, 1),
-        "avg_daily_spend_ngn": round(daily_spend, 2),
-        "top_categories": [
-            {"category": c, "amount_ngn": a, "pct_of_spend": round(a / total_debits_ngn * 100, 1)}
-            for c, a in top3
+        "avg_daily_spend_ngn": f"₦{daily_spend:,.2f}",
+        "top_spending_categories": [
+            {"category": c, "amount_ngn": f"₦{a:,.2f}", "pct_of_spend": round(a / debits * 100, 1) if debits > 0 else 0}
+            for c, a in sorted_cats
         ],
         "anomalies": anomalies,
-        "tips": tips,
+        "actionable_tips": tips,
         "financial_health": "Strong" if savings_rate > 25 else "Fair" if savings_rate > 10 else "Needs Attention",
+        "period_days": days,
+        "transaction_count": count,
     })
 
 

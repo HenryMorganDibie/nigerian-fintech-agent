@@ -276,3 +276,61 @@ cd frontend && npm install && npm run dev
 
 **Henry Dibie** — ML/Data Engineer
 [LinkedIn](https://linkedin.com/in/kinghenrymorgan) · [GitHub](https://github.com/HenryMorganDibie) · [Medium](https://medium.com/@KingHenryMorgan) · [X](https://twitter.com/KingHenryMorgan)
+
+---
+
+## Latest Upgrades (v3.1)
+
+### Tool Schema Fix
+All agent tools now have type coercion (`_bool`, `_int`, `_float` helpers) and safe defaults. The LLM no longer crashes when it passes `"unknown"` instead of a typed value. Every parameter is optional with sensible fallbacks.
+
+### Multi-Provider Fallback Chain + Circuit Breaker
+```
+1. Groq llama-3.3-70b-versatile   (primary)
+2. Groq llama-3.1-8b-instant      (Groq fallback — same key)
+3. OpenAI GPT-4o                   (if OPENAI_API_KEY set)
+4. Anthropic Claude                (if ANTHROPIC_API_KEY set)
+5. Rules-only degraded mode        (always works)
+```
+Circuit breaker trips after 3 consecutive failures, cools down for 10 minutes, auto-resets. Status visible at `GET /api/health`.
+
+### LLM Off Critical Path
+Fraud scoring never calls the LLM — Bayesian + behavioral + graph layers are fully deterministic. LLM is only called for narrative explanation, and only when risk is medium or higher (saves ~70% of tokens vs previous version).
+
+### Explainability Engine
+Every fraud decision now returns structured reason codes:
+```json
+{
+  "summary": "Transaction scored 84/100 (HIGH) — Primary: SIM swap detected",
+  "top_reason_codes": [
+    { "rank": 1, "label": "SIM replacement + high-value USSD", "score_contribution": 22, "context": "SIM replaced 5 hours ago", "cbn_reference": "CBN CPD/DIR/GEN/LAB/13/006" },
+    { "rank": 2, "label": "New device fingerprint", "score_contribution": 17, "context": "New device 3 hours before transfer" }
+  ],
+  "confidence": "Very High (>85%)",
+  "escalation_path": "Compliance → NFIU STR within 24h"
+}
+```
+
+### Fraud Simulation Sandbox
+6 pre-built Nigerian attack scenarios — test NaijaFinAI live:
+- SIM Swap Account Takeover
+- Agent Network Mule Chain
+- Structuring / Smurfing
+- First-Party Loan Fraud
+- Circular Flow / Layering
+- Account Takeover via Social Engineering
+
+`GET /api/simulate/scenarios` · `POST /api/simulate/run`
+
+### Localized Greeting System
+Time-based greeting with Nigerian language support:
+- English: "Good morning / afternoon / evening" (always shown)
+- Yoruba: "Ẹ káàárọ̀ / Ẹ káàsán / Ẹ káàlẹ́" (additive, when detected)
+- Igbo: "Ụtụtụ ọma / Ehihie ọma / Anyasị ọma"
+- Hausa: "Ina kwana / Ina wuni / Ina yini"
+- Pidgin: "Eku morning / How far / Eku evening"
+
+English is always primary — Nigerian greetings are additive, never replacing.
+
+### Frontend: 6 Tabs
+Chat · Workflows · **Simulate** · Eval · Voice & Files · Monitor
