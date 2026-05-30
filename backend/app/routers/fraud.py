@@ -1,11 +1,12 @@
 from fastapi import APIRouter
-from app.models.schemas import FraudAnalysisRequest, FraudSignalOut, RegulatoryFilingOut, CaseOutput
+from app.models.schemas import (
+    FraudAnalysisRequest, FraudSignalOut, RegulatoryFilingOut, CaseOutput,
+)
 from app.core.nigeria_intelligence import evaluate_transaction
 from app.core.bayesian_scorer import bayesian_fraud_score
 from app.core.feature_store import compute_behavioral_deviation, update_user_profile
 from app.core.fraud_graph import analyze_graph_risk, record_transaction_edge
 from app.core.decision_engine import apply_decision_engine, drift_monitor, feedback_store
-from app.core.explainability import build_explainability_report
 from app.core.compliance import get_required_filings, AuditLogEntry, scrub_pii_for_llm
 from app.core.llm_factory import get_llm_with_fallback
 from app.core.prompts import FRAUD_SYSTEM_PROMPT
@@ -14,9 +15,39 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from datetime import datetime, timezone, timedelta
 from typing import Literal
 from pydantic import BaseModel
-import json, uuid
+import json, uuid, asyncio, logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/fraud", tags=["fraud"])
+
+
+async def _safe_llm_narrative(provider: str, context: dict) -> str:
+    """Get LLM narrative with timeout — never blocks the fraud decision."""
+    try:
+        loop = asyncio.get_event_loop()
+        llm = get_llm_with_fallback(provider=provider)
+
+        def _call():
+            return llm.invoke([
+                SystemMessage(content=FRAUD_SYSTEM_PROMPT),
+                HumanMessage(content=(
+                    f"Fraud analysis: {json.dumps(context)}\n\n"
+                    "Write 2 sentences for a Nigerian fintech compliance officer. "
+                    "Cite CBN circulars. State the recommended action."
+                )),
+            ])
+
+        result = await asyncio.wait_for(
+            loop.run_in_executor(None, _call),
+            timeout=20.0,
+        )
+        return result.content.strip()
+    except asyncio.TimeoutError:
+        logger.warning("LLM narrative timed out — returning default")
+        return f"Risk score {context.get('composite_score', '?')}/100. Automated decision generated. Manual review recommended for compliance documentation."
+    except Exception as e:
+        logger.warning(f"LLM narrative failed: {e}")
+        return "Narrative unavailable. Review signal breakdown for compliance action."
 
 
 @router.post("/analyze")
@@ -48,7 +79,9 @@ async def analyze_fraud(req: FraudAnalysisRequest):
 
     # ── Layer 3: Behavioral deviation ────────────────────────────────────
     behavioral = compute_behavioral_deviation(
-        user_id=tx.sender_account, amount=tx.amount, channel=tx.channel,
+        user_id=tx.sender_account,
+        amount=tx.amount,
+        channel=tx.channel,
         device_fingerprint=str(tx.device_changed_hours_ago) if tx.device_changed_hours_ago else None,
         beneficiary_account=tx.recipient_account,
         hour_of_day=tx.timestamp.hour,
@@ -64,7 +97,7 @@ async def analyze_fraud(req: FraudAnalysisRequest):
     )
     record_transaction_edge(tx.sender_account, tx.recipient_account, tx.amount)
 
-    # ── Layer 5: Decision engine ──────────────────────────────────────────
+    # ── Layer 5: Multi-layer decision engine ──────────────────────────────
     decision = apply_decision_engine(
         bayesian_score=bayes.risk_score,
         bayesian_signals=triggered_names,
@@ -74,6 +107,7 @@ async def analyze_fraud(req: FraudAnalysisRequest):
         graph_patterns=graph["patterns_detected"],
     )
 
+    # Record to drift monitor
     drift_monitor.record_decision(
         composite_score=decision.composite_score,
         signals=triggered_names,
@@ -81,55 +115,26 @@ async def analyze_fraud(req: FraudAnalysisRequest):
         amount=tx.amount,
     )
 
-    # ── Explainability ────────────────────────────────────────────────────
-    explain = build_explainability_report(
-        risk_score=decision.composite_score,
-        risk_level=decision.risk_level,
-        posterior_probability=bayes.posterior_fraud_probability,
-        triggered_signals=bayes.signal_contributions,
-        top_3_signals=bayes.top_3_signals,
-        recommended_action=decision.action,
-        hard_override=decision.hard_override,
-        behavioral_factors=behavioral.get("factors", []),
-        graph_patterns=graph["patterns_detected"],
-        amount=tx.amount,
-        user_avg_amount=behavioral.get("user_avg_tx_amount", 0),
-    )
-
     # ── Regulatory filings ────────────────────────────────────────────────
-    all_signal_names = triggered_names + [p.get("type","") for p in graph["patterns_detected"]]
+    all_signals = triggered_names + [p.get("type", "") for p in graph["patterns_detected"]]
     filings = get_required_filings(
         risk_level=decision.risk_level,
         amount_ngn=tx.amount,
-        signal_names=all_signal_names,
+        signal_names=all_signals,
     )
 
-    # ── LLM narrative — only if risk is medium+ (save tokens) ────────────
-    llm_narrative = ""
-    if decision.risk_level in ("medium", "high", "critical"):
-        try:
-            safe_ctx = scrub_pii_for_llm({
-                "amount_ngn": tx.amount, "channel": tx.channel,
-                "hour": tx.timestamp.hour, "narration": tx.narration,
-                "composite_score": decision.composite_score,
-                "risk_level": decision.risk_level,
-                "signals": triggered_names[:3],          # limit tokens
-                "cbn_references": bayes.cbn_references[:2],
-            })
-            llm = get_llm_with_fallback(provider=provider)
-            llm_resp = llm.invoke([
-                SystemMessage(content=FRAUD_SYSTEM_PROMPT),
-                HumanMessage(content=(
-                    f"Fraud result: {json.dumps(safe_ctx)}\n"
-                    "Write ONE sentence for a compliance officer: risk level, main signal, recommended action. "
-                    "Cite the CBN circular. Be direct."
-                )),
-            ])
-            llm_narrative = llm_resp.content.strip()
-        except Exception as e:
-            llm_narrative = f"[LLM narrative unavailable: {str(e)[:60]}]"
-    else:
-        llm_narrative = explain.summary_sentence
+    # ── LLM narrative (non-blocking, 20s timeout) ─────────────────────────
+    safe_ctx = scrub_pii_for_llm({
+        "amount_ngn": tx.amount, "channel": tx.channel,
+        "composite_score": decision.composite_score,
+        "bayesian_score": bayes.risk_score,
+        "behavioral_score": behavioral["behavioral_deviation_score"],
+        "graph_score": graph["graph_risk_score"],
+        "hard_override": decision.hard_override,
+        "signals": triggered_names,
+        "cbn_references": bayes.cbn_references,
+    })
+    narrative = await _safe_llm_narrative(provider, safe_ctx)
 
     # ── Audit log ─────────────────────────────────────────────────────────
     audit = AuditLogEntry(
@@ -141,35 +146,36 @@ async def analyze_fraud(req: FraudAnalysisRequest):
         cbn_references=bayes.cbn_references,
         llm_provider=provider,
         human_review_required=decision.decision in ("review_queue", "escalate", "freeze_and_str"),
-        data_retention_expires=(datetime.now(timezone.utc) + timedelta(days=365*5)).isoformat(),
+        data_retention_expires=(datetime.now(timezone.utc) + timedelta(days=365 * 5)).isoformat(),
     )
 
     return {
-        "case_id":             str(uuid.uuid4())[:12],
-        "transaction_id":      tx.transaction_id,
-        "composite_score":     decision.composite_score,
-        "risk_level":          decision.risk_level,
-        "decision":            decision.decision,
-        "action":              decision.action,
-        "hard_override":       decision.hard_override,
-        "override_reason":     decision.override_reason,
-        "explainability":      explain.to_dict(),
-        "layer_breakdown":     decision.layer_breakdown,
-        "analyst_notes":       decision.analyst_notes,
+        "case_id":            str(uuid.uuid4())[:12],
+        "transaction_id":     tx.transaction_id,
+        "composite_score":    decision.composite_score,
+        "risk_level":         decision.risk_level,
+        "decision":           decision.decision,
+        "action":             decision.action,
+        "hard_override":      decision.hard_override,
+        "override_reason":    decision.override_reason,
+        "layer_breakdown":    decision.layer_breakdown,
+        "analyst_notes":      decision.analyst_notes,
+        "top_3_signals":      bayes.top_3_signals,
         "behavioral_deviation": behavioral,
-        "graph_risk":          graph,
-        "regulatory_filings":  [
+        "graph_risk":         graph,
+        "regulatory_filings": [
             {"filing_type": f.filing_type, "deadline": f.deadline_description,
              "regulatory_body": f.regulatory_body, "urgency_hours": f.urgency_hours}
             for f in filings
         ],
-        "llm_narrative":       llm_narrative,
-        "audit_log_id":        audit.audit_id,
-        "provider_used":       provider,
-        "created_at":          datetime.now(timezone.utc).isoformat(),
+        "llm_narrative":      narrative,
+        "audit_log_id":       audit.audit_id,
+        "provider_used":      provider,
+        "created_at":         datetime.now(timezone.utc).isoformat(),
     }
 
 
+# ── Feedback endpoint ─────────────────────────────────────────────────────────
 class FeedbackRequest(BaseModel):
     transaction_id: str
     audit_id: str
@@ -181,8 +187,11 @@ class FeedbackRequest(BaseModel):
 @router.post("/feedback")
 async def submit_feedback(req: FeedbackRequest):
     entry = feedback_store.record(
-        transaction_id=req.transaction_id, audit_id=req.audit_id,
-        outcome=req.outcome, analyst_id=req.analyst_id, notes=req.notes,
+        transaction_id=req.transaction_id,
+        audit_id=req.audit_id,
+        outcome=req.outcome,
+        analyst_id=req.analyst_id,
+        notes=req.notes,
     )
     drift_monitor.record_feedback(req.outcome)
     return {"status": "recorded", "entry": entry, "feedback_summary": feedback_store.summary()}

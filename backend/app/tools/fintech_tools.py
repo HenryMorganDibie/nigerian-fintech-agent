@@ -240,9 +240,9 @@ def cbn_loan_eligibility(
     return json.dumps({
         "eligible": eligible,
         "decision": "APPROVED" if eligible else "DECLINED",
-        "approved_amount_ngn": f"₦{approved_amount:,.2f}" if approved_amount else None,
+        "approved_amount_ngn": round(approved_amount, 2) if approved_amount else None,
         "monthly_rate_pct": monthly_rate,
-        "estimated_monthly_repayment_ngn": f"₦{repayment:,.2f}" if repayment else None,
+        "estimated_monthly_repayment_ngn": round(repayment, 2) if repayment else None,
         "tenor_months": tenor,
         "debt_to_income_ratio": round(dti, 3),
         "reasons": reasons,
