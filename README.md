@@ -806,4 +806,5 @@ Say: *"Let me send you the link so you can test it while I walk through it."*
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+Proprietary — see LICENSE file for full terms.
+Commercial licensing available upon request.
