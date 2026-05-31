@@ -1,0 +1,192 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750" width="1200" height="750">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#080C14"/>
+      <stop offset="100%" style="stop-color:#0E1520"/>
+    </linearGradient>
+    <linearGradient id="jade" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00E67622"/>
+      <stop offset="100%" style="stop-color:#00E67600"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="750" fill="url(#bg)"/>
+
+  <!-- Grid lines -->
+  <g opacity="0.04" stroke="#00E676" stroke-width="0.5">
+    <line x1="0" y1="40" x2="1200" y2="40"/>
+    <line x1="0" y1="80" x2="1200" y2="80"/>
+    <line x1="0" y1="120" x2="1200" y2="120"/>
+    <line x1="0" y1="160" x2="1200" y2="160"/>
+    <line x1="0" y1="200" x2="1200" y2="200"/>
+    <line x1="0" y1="240" x2="1200" y2="240"/>
+    <line x1="0" y1="280" x2="1200" y2="280"/>
+    <line x1="0" y1="320" x2="1200" y2="320"/>
+    <line x1="0" y1="360" x2="1200" y2="360"/>
+    <line x1="0" y1="400" x2="1200" y2="400"/>
+    <line x1="0" y1="440" x2="1200" y2="440"/>
+    <line x1="0" y1="480" x2="1200" y2="480"/>
+    <line x1="0" y1="520" x2="1200" y2="520"/>
+    <line x1="0" y1="560" x2="1200" y2="560"/>
+    <line x1="0" y1="600" x2="1200" y2="600"/>
+    <line x1="0" y1="640" x2="1200" y2="640"/>
+    <line x1="0" y1="680" x2="1200" y2="680"/>
+    <line x1="0" y1="720" x2="1200" y2="720"/>
+    <line x1="40" y1="0" x2="40" y2="750"/>
+    <line x1="80" y1="0" x2="80" y2="750"/>
+    <line x1="120" y1="0" x2="120" y2="750"/>
+    <line x1="160" y1="0" x2="160" y2="750"/>
+    <line x1="200" y1="0" x2="200" y2="750"/>
+    <line x1="240" y1="0" x2="240" y2="750"/>
+    <line x1="280" y1="0" x2="280" y2="750"/>
+    <line x1="320" y1="0" x2="320" y2="750"/>
+    <line x1="360" y1="0" x2="360" y2="750"/>
+    <line x1="400" y1="0" x2="400" y2="750"/>
+    <line x1="440" y1="0" x2="440" y2="750"/>
+    <line x1="480" y1="0" x2="480" y2="750"/>
+    <line x1="520" y1="0" x2="520" y2="750"/>
+    <line x1="560" y1="0" x2="560" y2="750"/>
+    <line x1="600" y1="0" x2="600" y2="750"/>
+    <line x1="640" y1="0" x2="640" y2="750"/>
+    <line x1="680" y1="0" x2="680" y2="750"/>
+    <line x1="720" y1="0" x2="720" y2="750"/>
+    <line x1="760" y1="0" x2="760" y2="750"/>
+    <line x1="800" y1="0" x2="800" y2="750"/>
+    <line x1="840" y1="0" x2="840" y2="750"/>
+    <line x1="880" y1="0" x2="880" y2="750"/>
+    <line x1="920" y1="0" x2="920" y2="750"/>
+    <line x1="960" y1="0" x2="960" y2="750"/>
+    <line x1="1000" y1="0" x2="1000" y2="750"/>
+    <line x1="1040" y1="0" x2="1040" y2="750"/>
+    <line x1="1080" y1="0" x2="1080" y2="750"/>
+    <line x1="1120" y1="0" x2="1120" y2="750"/>
+    <line x1="1160" y1="0" x2="1160" y2="750"/>
+  </g>
+
+  <!-- Sidebar -->
+  <rect x="0" y="0" width="240" height="750" fill="#0E1520" opacity="0.95"/>
+  <line x1="240" y1="0" x2="240" y2="750" stroke="#1C2A40" stroke-width="1"/>
+
+  <!-- Logo area -->
+  <rect x="16" y="16" width="32" height="32" rx="8" fill="#00E67215" stroke="#00E67640" stroke-width="1"/>
+  <text x="32" y="36" font-family="monospace" font-size="16" fill="#00E676" text-anchor="middle">🛡</text>
+  <text x="60" y="28" font-family="Arial" font-weight="700" font-size="15" fill="#EAF1FB">NaijaFinAI</text>
+  <text x="60" y="42" font-family="Arial" font-size="10" fill="#4A6080">v3.0 · Nigeria-native</text>
+  <rect x="60" y="48" width="54" height="14" rx="3" fill="#00E67215" stroke="#00E67630" stroke-width="1"/>
+  <text x="87" y="58" font-family="Arial" font-size="9" fill="#00E676" text-anchor="middle">🇳🇬 EN detected</text>
+
+  <!-- Provider section -->
+  <line x1="16" y1="80" x2="224" y2="80" stroke="#1C2A40" stroke-width="1"/>
+  <text x="16" y="96" font-family="Arial" font-size="10" fill="#4A6080">⚙ LLM Provider</text>
+  <rect x="16" y="102" width="208" height="28" rx="8" fill="#141E2E" stroke="#2A3F60" stroke-width="1"/>
+  <circle cx="30" cy="116" r="4" fill="#00E676"/>
+  <text x="42" y="120" font-family="Arial" font-weight="600" font-size="11" fill="#00E676">Groq (Free)</text>
+  <text x="210" y="120" font-family="Arial" font-size="10" fill="#4A6080" text-anchor="end">▾</text>
+
+  <!-- Quick scenarios -->
+  <line x1="16" y1="142" x2="224" y2="142" stroke="#1C2A40" stroke-width="1"/>
+  <text x="16" y="158" font-family="Arial" font-size="9" fill="#4A6080" letter-spacing="1">QUICK SCENARIOS</text>
+  <rect x="16" y="164" width="208" height="26" rx="6" fill="#00E67208" stroke="#00E67620" stroke-width="1"/>
+  <text x="28" y="181" font-family="Arial" font-size="11" fill="#C8D6E8">🔍 SIM Swap Alert</text>
+  <rect x="16" y="196" width="208" height="26" rx="6" fill="transparent"/>
+  <text x="28" y="213" font-family="Arial" font-size="11" fill="#4A6080">📋 CBN KYC Rules</text>
+  <rect x="16" y="228" width="208" height="26" rx="6" fill="transparent"/>
+  <text x="28" y="245" font-family="Arial" font-size="11" fill="#4A6080">💰 Loan Eligibility</text>
+  <rect x="16" y="260" width="208" height="26" rx="6" fill="transparent"/>
+  <text x="28" y="277" font-family="Arial" font-size="11" fill="#4A6080">📊 Spending Insight</text>
+  <rect x="16" y="292" width="208" height="26" rx="6" fill="transparent"/>
+  <text x="28" y="309" font-family="Arial" font-size="11" fill="#4A6080">⚠️ Structuring Check</text>
+  <rect x="16" y="324" width="208" height="26" rx="6" fill="transparent"/>
+  <text x="28" y="341" font-family="Arial" font-size="11" fill="#4A6080">🇳🇬 Pidgin Query</text>
+
+  <!-- Sidebar footer -->
+  <text x="16" y="720" font-family="Arial" font-size="9" fill="#4A6080">CBN · NFIU · NDPA 2023 aware</text>
+  <text x="16" y="734" font-family="monospace" font-size="8" fill="#2A3F60">Audit logs: NDPA §40 compliant</text>
+
+  <!-- Main area header -->
+  <rect x="240" y="0" width="960" height="48" fill="#080C14"/>
+  <line x1="240" y1="48" x2="1200" y2="48" stroke="#1C2A40" stroke-width="1"/>
+
+  <!-- Tabs -->
+  <rect x="252" y="10" width="64" height="28" rx="7" fill="#00E67215"/>
+  <text x="284" y="28" font-family="Arial" font-size="11" font-weight="500" fill="#00E676" text-anchor="middle">💬 Chat</text>
+  <text x="346" y="28" font-family="Arial" font-size="11" fill="#4A6080">⚡ Workflows</text>
+  <text x="440" y="28" font-family="Arial" font-size="11" fill="#4A6080">📊 Eval</text>
+  <text x="510" y="28" font-family="Arial" font-size="11" fill="#4A6080">🎙 Voice &amp; Files</text>
+  <text x="612" y="28" font-family="Arial" font-size="11" fill="#4A6080">📡 Monitor</text>
+
+  <!-- Status indicator -->
+  <circle cx="1110" cy="24" r="4" fill="#00E676"/>
+  <text x="1120" y="28" font-family="Arial" font-size="10" fill="#00E676">GROQ · LIVE</text>
+
+  <!-- Tool call banner -->
+  <rect x="240" y="48" width="960" height="24" fill="#00E67208"/>
+  <line x1="240" y1="72" x2="1200" y2="72" stroke="#00E67625" stroke-width="1"/>
+  <text x="256" y="64" font-family="Arial" font-size="11" fill="#00E676">⚡ Tools invoked: </text>
+  <rect x="365" y="52" width="130" height="16" rx="3" fill="#00E67610" stroke="#00E67630" stroke-width="1"/>
+  <text x="430" y="64" font-family="monospace" font-size="9" fill="#00E676" text-anchor="middle">nigerian_fraud_score</text>
+
+  <!-- Chat messages -->
+  <!-- User message -->
+  <g transform="translate(0, 90)">
+    <rect x="620" y="10" width="540" height="56" rx="12" fill="#141E2E" stroke="#1C2A40" stroke-width="1"/>
+    <rect x="620" y="10" width="4" height="56" rx="2" fill="transparent"/>
+    <text x="636" y="30" font-family="Arial" font-size="12" fill="#C8D6E8">A customer made a ₦85,000 USSD transfer at 3am,</text>
+    <text x="636" y="48" font-family="Arial" font-size="12" fill="#C8D6E8">12 hours after their SIM was replaced. Analyze this.</text>
+    <circle cx="1175" cy="38" r="14" fill="#1C2A40"/>
+    <text x="1175" y="43" font-family="monospace" font-size="11" fill="#4A6080" text-anchor="middle">👤</text>
+    <text x="1155" y="78" font-family="Arial" font-size="9" fill="#4A6080" text-anchor="end">09:15</text>
+  </g>
+
+  <!-- Agent response with risk color -->
+  <g transform="translate(0, 170)">
+    <circle cx="268" cy="28" r="14" fill="#00E67215" stroke="#00E67640" stroke-width="1"/>
+    <text x="268" y="33" font-family="monospace" font-size="11" fill="#00E676" text-anchor="middle">🤖</text>
+    <rect x="290" y="8" width="620" height="128" rx="12" fill="#122040" stroke="#FF880030" stroke-width="1"/>
+    <rect x="290" y="8" width="4" height="128" rx="2" fill="#FF8800"/>
+    <!-- Risk badge -->
+    <rect x="306" y="18" width="78" height="18" rx="4" fill="#FF880015" stroke="#FF880040" stroke-width="1"/>
+    <text x="345" y="30" font-family="Arial" font-weight="700" font-size="10" fill="#FF8800" text-anchor="middle">🔴 HIGH RISK</text>
+    <rect x="394" y="18" width="82" height="18" rx="4" fill="#1C2A40"/>
+    <text x="435" y="30" font-family="monospace" font-size="9" fill="#4A6080" text-anchor="middle">Score: 78/100</text>
+    <text x="306" y="56" font-family="Arial" font-weight="600" font-size="12" fill="#EAF1FB">⚡ SIM_SWAP_HIGH_VALUE_USSD detected (LR: 22×)</text>
+    <text x="306" y="74" font-family="Arial" font-size="11" fill="#C8D6E8">This transaction matches a classic Nigerian SIM swap attack pattern — USSD</text>
+    <text x="306" y="91" font-family="Arial" font-size="11" fill="#C8D6E8">transfer within 48h of SIM replacement, after-hours timing, new recipient.</text>
+    <text x="306" y="110" font-family="Arial" font-weight="600" font-size="11" fill="#FF8800">Action: Hold transaction. Require in-person BVN re-verification.</text>
+    <text x="306" y="127" font-family="Arial" font-size="10" fill="#4A6080">CBN Circular CPD/DIR/GEN/LAB/13/006 · STR filing may be required</text>
+    <text x="306" y="148" font-family="Arial" font-size="9" fill="#4A6080">09:15</text>
+    <text x="340" y="148" font-family="monospace" font-size="8" fill="#2A3F60"># a4f9c2d1</text>
+  </g>
+
+  <!-- Pidgin message -->
+  <g transform="translate(0, 320)">
+    <rect x="620" y="10" width="540" height="40" rx="12" fill="#141E2E" stroke="#1C2A40" stroke-width="1"/>
+    <text x="636" y="35" font-family="Arial" font-size="12" fill="#C8D6E8">Abeg, dem chop my ₦50,000 twice this morning. Wetin I go do?</text>
+    <circle cx="1175" cy="30" r="14" fill="#1C2A40"/>
+    <text x="1175" y="35" font-family="monospace" font-size="11" fill="#4A6080" text-anchor="middle">👤</text>
+    <rect x="256" y="58" width="60" height="16" rx="3" fill="#00E67215" stroke="#00E67630" stroke-width="1"/>
+    <text x="286" y="70" font-family="Arial" font-size="9" fill="#00E676" text-anchor="middle">🇳🇬 Pidgin</text>
+  </g>
+
+  <!-- Pidgin agent response -->
+  <g transform="translate(0, 380)">
+    <circle cx="268" cy="28" r="14" fill="#00E67215" stroke="#00E67640" stroke-width="1"/>
+    <text x="268" y="33" font-family="monospace" font-size="11" fill="#00E676" text-anchor="middle">🤖</text>
+    <rect x="290" y="8" width="500" height="80" rx="12" fill="#122040" stroke="#1C2A40" stroke-width="1"/>
+    <rect x="290" y="8" width="4" height="80" rx="2" fill="#00E676"/>
+    <text x="306" y="30" font-family="Arial" font-size="12" fill="#C8D6E8">Abeg no worry — I go help you sort am. "Dem chop my money" na</text>
+    <text x="306" y="48" font-family="Arial" font-size="12" fill="#C8D6E8">unauthorized debit. Call your bank now to dispute and freeze account.</text>
+    <text x="306" y="66" font-family="Arial" font-size="12" fill="#00E676">Your rights under CBN Consumer Protection Framework apply.</text>
+    <text x="306" y="100" font-family="Arial" font-size="9" fill="#4A6080">09:16 · # b9e12f04</text>
+  </g>
+
+  <!-- Input area -->
+  <rect x="240" y="680" width="960" height="70" fill="#080C14"/>
+  <line x1="240" y1="680" x2="1200" y2="680" stroke="#1C2A40" stroke-width="1"/>
+  <rect x="260" y="692" width="840" height="36" rx="12" fill="#0E1520" stroke="#2A3F60" stroke-width="1"/>
+  <text x="276" y="714" font-family="Arial" font-size="12" fill="#4A6080">Ask in English, Pidgin, Yoruba, Hausa, or Igbo…</text>
+  <rect x="1116" y="692" width="64" height="36" rx="12" fill="#00E676"/>
+  <text x="1148" y="715" font-family="Arial" font-size="18" fill="#080C14" text-anchor="middle">➤</text>
+  <text x="690" y="740" font-family="Arial" font-size="9" fill="#4A6080" text-anchor="middle">CBN · NFIU · NDPA 2023 · Bayesian Fraud Scoring · Powered by Groq (Free)</text>
+</svg>
