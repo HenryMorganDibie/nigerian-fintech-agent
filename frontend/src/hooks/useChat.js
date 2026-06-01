@@ -3,7 +3,7 @@ import { streamChat } from "../utils/api";
 
 const GREETING = {
   role: "assistant",
-  content: "**Welcome to NaijaFinAI.**\n\nFraud intelligence, loan assessment, and transaction analytics — built natively for Nigerian fintechs.\n\nProvide a transaction, applicant, or ask a compliance question to get started.",
+  content: "**Ẹ káàbọ̀. Welcome.**\n\nI'm NaijaFinAI — built from the ground up for Nigerian fintechs.\n\nI speak your stack: CBN circulars, NIBSS NIP, BVN/NIN KYC tiers, NFIU STR deadlines, SIM swap patterns, Pidgin English.\n\nHow can I help you today?",
   timestamp: new Date(),
   language: "english",
 };
@@ -57,14 +57,26 @@ export function useChat(provider) {
         },
       });
     } catch (err) {
-      // Show the actual error so it's easier to debug
-      const errMsg = err?.message?.includes("API 5")
-        ? "Backend error — Railway may be sleeping. Try again in 30 seconds."
-        : err?.message?.includes("API 4")
-        ? "Request rejected — check CORS settings on Railway."
-        : err?.message?.includes("Failed to fetch") || err?.message?.includes("NetworkError")
-        ? "Cannot reach backend. Check Railway is running at the correct URL."
-        : `Error: ${err?.message || "Unknown error"}`;
+      const raw = err?.message || "";
+      let errMsg;
+
+      if (raw.includes("Failed to fetch") || raw.includes("NetworkError") || raw.includes("ERR_NETWORK")) {
+        errMsg = "Cannot reach backend. Railway may be sleeping — wait 30 seconds and try again.";
+      } else if (raw.includes("502") || raw.includes("503") || raw.includes("504")) {
+        errMsg = "Backend is starting up (Railway cold start). Wait 20–30 seconds and try again.";
+      } else if (raw.includes("404")) {
+        errMsg = "Endpoint not found (404). The backend may not have the latest code — try again shortly.";
+      } else if (raw.includes("422")) {
+        errMsg = "Invalid request (422). Please try rephrasing your message.";
+      } else if (raw.includes("401") || raw.includes("403")) {
+        errMsg = `Auth error (${raw.match(/\d{3}/)?.[0]}). Check Railway environment variables.`;
+      } else if (raw.match(/4\d\d/)) {
+        errMsg = `Request error (${raw.match(/\d{3}/)?.[0]}). Check the backend logs on Railway.`;
+      } else if (raw.match(/5\d\d/)) {
+        errMsg = `Server error (${raw.match(/\d{3}/)?.[0]}). Check Railway deploy logs.`;
+      } else {
+        errMsg = raw ? `Error: ${raw}` : "Something went wrong. Check Railway is deployed and running.";
+      }
 
       setMessages(prev => {
         const next = [...prev];

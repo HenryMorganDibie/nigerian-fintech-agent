@@ -7,7 +7,7 @@ export async function streamChat({ message, history, provider, onToken, onToolCa
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, history, provider, stream: true }),
   });
-  if (!res.ok) throw new Error(`API ${res.status}`);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   while (true) {
