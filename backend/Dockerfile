@@ -12,3 +12,4 @@ COPY app/ ./app/
 EXPOSE 8000
 
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# force redeploy Mon Jun  1 19:40:01 UTC 2026
