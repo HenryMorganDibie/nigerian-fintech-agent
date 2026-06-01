@@ -1,8 +1,12 @@
-const BASE = import.meta.env.VITE_API_URL || "/api";
+// Hardcoded fallback ensures it works even if VITE_API_URL isn't injected at build time
+const BASE = import.meta.env.VITE_API_URL
+  || "https://nigerian-fintech-agent-production.up.railway.app";
+
+const API = `${BASE}/api`;
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 export async function streamChat({ message, history, provider, onToken, onToolCall, onLanguage, onDone }) {
-  const res = await fetch(`${BASE}/chat`, {
+  const res = await fetch(`${API}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, history, provider, stream: true }),
@@ -16,7 +20,7 @@ export async function streamChat({ message, history, provider, onToken, onToolCa
     for (const line of dec.decode(value).split("\n").filter(l => l.startsWith("data: "))) {
       try {
         const d = JSON.parse(line.slice(6));
-        if (d.type === "token")      onToken?.(d.content);
+        if (d.type === "token")           onToken?.(d.content);
         else if (d.type === "tool_calls") onToolCall?.(d.tools);
         else if (d.type === "language")   onLanguage?.(d.language);
         else if (d.type === "done")       onDone?.(d);
@@ -27,11 +31,11 @@ export async function streamChat({ message, history, provider, onToken, onToolCa
 
 // ── Providers ─────────────────────────────────────────────────────────────────
 export const fetchProviders = () =>
-  fetch(`${BASE}/providers`).then(r => r.json()).catch(() => ({ providers: [] }));
+  fetch(`${API}/providers`).then(r => r.json()).catch(() => ({ providers: [] }));
 
-// ── Eval ─────────────────────────────────────────────────────────────────────
+// ── Eval ──────────────────────────────────────────────────────────────────────
 export const runEval = (provider) =>
-  fetch(`${BASE}/eval/run`, {
+  fetch(`${API}/eval/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ use_synthetic: true, provider }),
@@ -39,22 +43,22 @@ export const runEval = (provider) =>
 
 // ── Workflows ─────────────────────────────────────────────────────────────────
 export const runWorkflow = (scenario_id, provider) =>
-  fetch(`${BASE}/workflows/run`, {
+  fetch(`${API}/workflows/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ scenario_id, provider }),
   }).then(r => r.json());
 
 export const listWorkflows = () =>
-  fetch(`${BASE}/workflows/scenarios`).then(r => r.json());
+  fetch(`${API}/workflows/scenarios`).then(r => r.json());
 
-// ── Media (voice + file) ──────────────────────────────────────────────────────
+// ── Media ─────────────────────────────────────────────────────────────────────
 export async function uploadVoice(file, provider = "groq") {
   const fd = new FormData();
   fd.append("file", file);
   fd.append("provider", provider);
-  const r = await fetch(`${BASE}/media/voice`, { method: "POST", body: fd });
-  if (!r.ok) throw new Error("Voice upload failed");
+  const r = await fetch(`${API}/media/voice`, { method: "POST", body: fd });
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
   return r.json();
 }
 
@@ -62,31 +66,31 @@ export async function uploadFile(file, provider = "groq") {
   const fd = new FormData();
   fd.append("file", file);
   fd.append("provider", provider);
-  const r = await fetch(`${BASE}/media/upload`, { method: "POST", body: fd });
-  if (!r.ok) throw new Error("File upload failed");
+  const r = await fetch(`${API}/media/upload`, { method: "POST", body: fd });
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
   return r.json();
 }
 
 // ── Fraud + Monitoring ────────────────────────────────────────────────────────
 export const fetchDrift = () =>
-  fetch(`${BASE}/fraud/drift`).then(r => r.json());
+  fetch(`${API}/fraud/drift`).then(r => r.json());
 
 export const submitFeedback = (payload) =>
-  fetch(`${BASE}/fraud/feedback`, {
+  fetch(`${API}/fraud/feedback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   }).then(r => r.json());
 
 export const fetchEventStats = () =>
-  fetch(`${BASE}/fraud/events/stats`).then(r => r.json());
+  fetch(`${API}/fraud/events/stats`).then(r => r.json());
 
 // ── Simulation ────────────────────────────────────────────────────────────────
 export const listSimulations = () =>
-  fetch(`${BASE}/simulate/scenarios`).then(r => r.json());
+  fetch(`${API}/simulate/scenarios`).then(r => r.json());
 
 export const runSimulation = (scenario_id, provider) =>
-  fetch(`${BASE}/simulate/run`, {
+  fetch(`${API}/simulate/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ scenario_id, provider }),
@@ -94,20 +98,20 @@ export const runSimulation = (scenario_id, provider) =>
 
 // ── A/B Testing ───────────────────────────────────────────────────────────────
 export const listExperiments = () =>
-  fetch(`${BASE}/ab/experiments`).then(r => r.json());
+  fetch(`${API}/ab/experiments`).then(r => r.json());
 
 export const getExperimentResults = (experiment_id) =>
-  fetch(`${BASE}/ab/results/${experiment_id}`).then(r => r.json());
+  fetch(`${API}/ab/results/${experiment_id}`).then(r => r.json());
 
 // ── Case Queue ────────────────────────────────────────────────────────────────
 export const listCases = (status) =>
-  fetch(`${BASE}/cases/list${status ? `?status=${status}` : ""}`).then(r => r.json());
+  fetch(`${API}/cases/list${status ? `?status=${status}` : ""}`).then(r => r.json());
 
 export const getCaseStats = () =>
-  fetch(`${BASE}/cases/stats/summary`).then(r => r.json());
+  fetch(`${API}/cases/stats/summary`).then(r => r.json());
 
 export const caseAction = (case_id, action, actor = "analyst", note = "") =>
-  fetch(`${BASE}/cases/${case_id}/action`, {
+  fetch(`${API}/cases/${case_id}/action`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action, actor, note }),
@@ -115,4 +119,4 @@ export const caseAction = (case_id, action, actor = "analyst", note = "") =>
 
 // ── Health ────────────────────────────────────────────────────────────────────
 export const fetchHealth = () =>
-  fetch(`${BASE}/health`).then(r => r.json()).catch(() => null);
+  fetch(`${API}/health`).then(r => r.json()).catch(() => null);
