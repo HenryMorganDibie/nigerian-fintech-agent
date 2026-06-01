@@ -3,7 +3,7 @@ import { streamChat } from "../utils/api";
 
 const GREETING = {
   role: "assistant",
-  content: "**Ẹ káàbọ̀. Welcome.**\n\nI'm NaijaFinAI — built from the ground up for Nigerian fintechs.\n\nI speak your stack: CBN circulars, NIBSS NIP, BVN/NIN KYC tiers, NFIU STR deadlines, SIM swap patterns, Pidgin English.\n\nHow can I help you today?",
+  content: "**Welcome to NaijaFinAI** 🇳🇬\n\nI'm built from the ground up for Nigerian fintechs.\n\nI speak your stack: CBN circulars, NIBSS NIP, BVN/NIN KYC tiers, NFIU STR deadlines, SIM swap patterns, Pidgin English.\n\nHow can I help you today?",
   timestamp: new Date(),
   language: "english",
 };
