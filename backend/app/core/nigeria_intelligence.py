@@ -333,3 +333,153 @@ def evaluate_transaction(
         )
 
     return result
+
+# ── Additional signals appended ───────────────────────────────────────────────
+
+NIGERIAN_FRAUD_SIGNALS.extend([
+    FraudSignal(
+        name="CARD_TESTING_PATTERN",
+        severity="critical",
+        score_delta=40,
+        description="Multiple failed payment attempts followed by small successful transaction "
+                    "— classic card testing to validate stolen card details before large purchase.",
+        cbn_reference="CBN Card Fraud Advisory 2023 / NIBSS Fraud Report 2023",
+        recommended_action="Block card immediately. Flag card number for network-wide watch. File STR.",
+    ),
+    FraudSignal(
+        name="NEW_ACCOUNT_LARGE_MOVEMENT",
+        severity="high",
+        score_delta=32,
+        description="Account less than 14 days old moving large amounts. "
+                    "New accounts are the primary vehicle for first-party fraud and mule operations.",
+        cbn_reference="CBN KYC Regulations 2023 — enhanced due diligence for new accounts",
+        recommended_action="Hold transaction. Escalate to KYC team for enhanced verification.",
+    ),
+    FraudSignal(
+        name="IMMEDIATE_CASHOUT",
+        severity="high",
+        score_delta=35,
+        description="95%+ of recently received funds immediately moved out. "
+                    "Pattern consistent with mule account pass-through or wallet-funding fraud.",
+        cbn_reference="CBN AML/CFT Regulations 2022 §3.1 — placement and layering",
+        recommended_action="Hold outbound transaction. Review inbound source. May require STR.",
+    ),
+    FraudSignal(
+        name="HIGH_BENEFICIARY_COUNT",
+        severity="high",
+        score_delta=28,
+        description="Account sending to an unusually high number of unique beneficiaries "
+                    "in 24 hours — fan-out pattern consistent with mule chain distribution.",
+        cbn_reference="CBN Agent Banking Guidelines 2019 §6.3 — velocity and fan-out",
+        recommended_action="Flag for analyst review. Cross-reference beneficiaries against watchlist.",
+    ),
+    FraudSignal(
+        name="SHARED_BVN_MULTI_ACCOUNT",
+        severity="high",
+        score_delta=30,
+        description="BVN linked to 4+ accounts. Normal customers have 1–2. "
+                    "High BVN account count indicates account farming for fraud or money laundering.",
+        cbn_reference="CBN Circular BPS/DIR/2020/004 — BVN policy",
+        recommended_action="Freeze all linked accounts. Escalate to compliance for BVN audit.",
+    ),
+    FraudSignal(
+        name="POS_REVERSAL_ABUSE",
+        severity="high",
+        score_delta=33,
+        description="Multiple POS reversal credits to same account in short window. "
+                    "Classic POS reversal fraud — merchant collusion or terminal override.",
+        cbn_reference="CBN POS Guidelines 2023 — reversal limits and merchant controls",
+        recommended_action="Suspend merchant terminal. Contact acquiring bank. File STR.",
+    ),
+])
+
+# Rebuild the signal map after extending
+SIGNAL_MAP = {s.name: s for s in NIGERIAN_FRAUD_SIGNALS}
+
+
+def evaluate_transaction_extended(
+    base_eval,           # result from evaluate_transaction()
+    failed_attempts_last_1h: int = 0,
+    account_age_days: int = 365,
+    beneficiary_count_24h: int = 0,
+    bvn_linked_accounts: int = 1,
+    immediate_cashout_ratio: float = 0.0,
+    channel: str = "transfer",
+    amount: float = 0,
+) -> "FraudEvaluation":
+    """
+    Extends a base FraudEvaluation with new signals from extended transaction fields.
+    Call evaluate_transaction() first, pass result here.
+    """
+    result = base_eval
+
+    def trigger(signal_name: str):
+        s = SIGNAL_MAP.get(signal_name)
+        if not s:
+            return
+        if s not in result.triggered_signals:
+            result.triggered_signals.append(s)
+            result.total_score = min(100, result.total_score + s.score_delta)
+            if s.cbn_reference:
+                result.cbn_references.append(s.cbn_reference)
+
+    # Card testing — 5+ failed attempts + small amount
+    if failed_attempts_last_1h >= 5 and amount < 5000:
+        trigger("CARD_TESTING_PATTERN")
+    elif failed_attempts_last_1h >= 3 and channel in ("card_payment", "pos"):
+        trigger("CARD_TESTING_PATTERN")
+
+    # New account + significant movement
+    if account_age_days < 14 and amount > 50_000:
+        trigger("NEW_ACCOUNT_LARGE_MOVEMENT")
+    elif account_age_days < 30 and amount > 200_000:
+        trigger("NEW_ACCOUNT_LARGE_MOVEMENT")
+
+    # Immediate cashout — 95%+ of inflow immediately sent out
+    if immediate_cashout_ratio >= 0.95 and amount > 10_000:
+        trigger("IMMEDIATE_CASHOUT")
+    elif immediate_cashout_ratio >= 0.80 and amount > 100_000:
+        trigger("IMMEDIATE_CASHOUT")
+
+    # High beneficiary count
+    if beneficiary_count_24h >= 15:
+        trigger("HIGH_BENEFICIARY_COUNT")
+    elif beneficiary_count_24h >= 8 and account_age_days < 30:
+        trigger("HIGH_BENEFICIARY_COUNT")
+
+    # BVN linked to many accounts
+    if bvn_linked_accounts >= 4:
+        trigger("SHARED_BVN_MULTI_ACCOUNT")
+
+    # POS reversal abuse
+    if channel in ("pos_reversal",) and result.total_score > 0:
+        trigger("POS_REVERSAL_ABUSE")
+    # Even without prior signals, multiple reversals is suspicious
+    if channel == "pos_reversal":
+        trigger("POS_REVERSAL_ABUSE")
+
+    # Recalculate risk level after extended scoring
+    score = result.total_score
+    if result.triggered_signals:
+        result.primary_signal = max(result.triggered_signals, key=lambda s: s.score_delta)
+
+    if score <= 25:
+        result.risk_level = "low"
+        result.recommended_action = "✅ Approve — no significant risk signals detected"
+    elif score <= 50:
+        result.risk_level = "medium"
+        result.recommended_action = "🟡 Review — step-up OTP required. Confirm with customer."
+    elif score <= 75:
+        result.risk_level = "high"
+        result.recommended_action = (
+            result.primary_signal.recommended_action
+            if result.primary_signal else "🔴 Hold — escalate to compliance team"
+        )
+    else:
+        result.risk_level = "critical"
+        result.recommended_action = (
+            result.primary_signal.recommended_action
+            if result.primary_signal else "🚨 Block immediately — file STR with NFIU"
+        )
+
+    return result

@@ -3,6 +3,8 @@ from typing import Literal, Optional, Any
 from datetime import datetime
 
 
+# ── Chat ──────────────────────────────────────────────────────────────────────
+
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant", "system"]
     content: str
@@ -12,7 +14,7 @@ class ChatRequest(BaseModel):
     message: str
     history: list[ChatMessage] = []
     provider: Optional[str] = None
-    tenant_id: Optional[str] = None  # Multi-tenant support
+    tenant_id: Optional[str] = None
     stream: bool = True
 
 
@@ -24,13 +26,16 @@ class ChatResponse(BaseModel):
     audit_id: Optional[str] = None
 
 
+# ── Transaction ───────────────────────────────────────────────────────────────
+
 class Transaction(BaseModel):
     transaction_id: str
     amount: float
     timestamp: datetime
     sender_account: str
     recipient_account: str
-    channel: Literal["web", "mobile", "ussd", "pos", "atm", "transfer", "agent"]
+    channel: str = "transfer"          # accept any string — no strict enum
+    direction: str = "debit"
     is_new_recipient: bool = False
     is_new_device: bool = False
     is_agent_terminal: bool = False
@@ -45,6 +50,15 @@ class Transaction(BaseModel):
     narration: str = ""
     recent_outbound_ngn: float = 0
     recent_inbound_from_same_ngn: float = 0
+    # Extended fields — richer scoring
+    failed_attempts_last_1h: int = 0       # card testing / brute force
+    account_age_days: int = 365            # new account = higher risk
+    beneficiary_count_24h: int = 0         # fan-out / mule distribution
+    bvn_linked_accounts: int = 1           # shared BVN across accounts
+    immediate_cashout_ratio: float = 0.0   # outflow / recent inflow (0–1)
+    micro_tx_last_10min: int = 0           # card testing — rapid micro-transactions
+    is_pos_reversal: bool = False          # POS reversal after flagged tx
+    new_beneficiaries_last_hour: int = 0   # beneficiary explosion detection
 
 
 class FraudAnalysisRequest(BaseModel):
@@ -81,6 +95,25 @@ class FraudAnalysisResponse(BaseModel):
     provider_used: str
 
 
+# ── CaseOutput ────────────────────────────────────────────────────────────────
+
+class CaseOutput(BaseModel):
+    case_id: str
+    transaction_id: str
+    risk_score: int
+    posterior_fraud_probability: float
+    risk_level: str
+    top_3_signals: list[dict]
+    regulatory_action: str
+    filings_required: list[RegulatoryFilingOut]
+    audit_log_id: str
+    llm_narrative: str
+    provider_used: str
+    created_at: str
+
+
+# ── Transaction Insights ──────────────────────────────────────────────────────
+
 class TransactionRecord(BaseModel):
     date: str
     amount: float
@@ -106,6 +139,8 @@ class TransactionInsightsResponse(BaseModel):
     insights: str
     provider_used: str
 
+
+# ── Loan ──────────────────────────────────────────────────────────────────────
 
 class LoanEligibilityRequest(BaseModel):
     monthly_income_ngn: float
@@ -135,7 +170,7 @@ class LoanEligibilityResponse(BaseModel):
     provider_used: str
 
 
-# ── Evaluation Harness ───────────────────────────────────────
+# ── Eval ──────────────────────────────────────────────────────────────────────
 
 class EvalSample(BaseModel):
     transaction_id: str
@@ -172,24 +207,7 @@ class EvalRunResponse(BaseModel):
     provider_used: str
 
 
-# ── Case Output Format ────────────────────────────────────────
-
-class CaseOutput(BaseModel):
-    case_id: str
-    transaction_id: str
-    risk_score: int
-    posterior_fraud_probability: float
-    risk_level: str
-    top_3_signals: list[dict]
-    regulatory_action: str
-    filings_required: list[RegulatoryFilingOut]
-    audit_log_id: str
-    llm_narrative: str
-    provider_used: str
-    created_at: str
-
-
-# ── Workflow Demo Scenarios ───────────────────────────────────
+# ── Workflow ──────────────────────────────────────────────────────────────────
 
 class WorkflowScenario(BaseModel):
     scenario_id: str
@@ -215,7 +233,7 @@ class WorkflowRunResponse(BaseModel):
     provider_used: str
 
 
-# ── Voice & File Upload ───────────────────────────────────────
+# ── Voice & File ──────────────────────────────────────────────────────────────
 
 class VoiceTranscribeResponse(BaseModel):
     transcript: str

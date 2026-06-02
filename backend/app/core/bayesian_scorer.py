@@ -289,3 +289,70 @@ def bayesian_fraud_score(triggered_signal_names: list[str]) -> BayesianEvaluatio
         result.recommended_action = top.recommended_action if top else "🚨 Block immediately — file STR with NFIU"
 
     return result
+
+# ── New signals appended to Bayesian library ───────────────────────────────────
+
+BAYESIAN_SIGNALS.extend([
+    BayesianSignal(
+        name="CARD_TESTING_PATTERN",
+        severity="critical",
+        prior_prob=0.88,
+        likelihood_ratio=28.0,
+        weight=1.6,
+        description="Multiple failed attempts + small successful transaction — stolen card validation.",
+        cbn_reference="CBN Card Fraud Advisory 2023",
+        recommended_action="Block card immediately. File STR.",
+    ),
+    BayesianSignal(
+        name="NEW_ACCOUNT_LARGE_MOVEMENT",
+        severity="high",
+        prior_prob=0.71,
+        likelihood_ratio=12.0,
+        weight=1.3,
+        description="Account <14 days old moving large amounts — first-party fraud or mule vehicle.",
+        cbn_reference="CBN KYC Regulations 2023",
+        recommended_action="Hold transaction. Enhanced KYC verification required.",
+    ),
+    BayesianSignal(
+        name="IMMEDIATE_CASHOUT",
+        severity="high",
+        prior_prob=0.78,
+        likelihood_ratio=16.5,
+        weight=1.4,
+        description="95%+ of received funds immediately moved out — mule pass-through pattern.",
+        cbn_reference="CBN AML/CFT Regulations 2022 §3.1",
+        recommended_action="Hold outbound. Review inbound source. Consider STR.",
+    ),
+    BayesianSignal(
+        name="HIGH_BENEFICIARY_COUNT",
+        severity="high",
+        prior_prob=0.69,
+        likelihood_ratio=11.0,
+        weight=1.2,
+        description="High unique beneficiary count in 24h — fan-out mule distribution.",
+        cbn_reference="CBN Agent Banking Guidelines 2019 §6.3",
+        recommended_action="Flag for analyst. Cross-reference beneficiaries.",
+    ),
+    BayesianSignal(
+        name="SHARED_BVN_MULTI_ACCOUNT",
+        severity="high",
+        prior_prob=0.74,
+        likelihood_ratio=13.5,
+        weight=1.3,
+        description="BVN linked to 4+ accounts — account farming for fraud.",
+        cbn_reference="CBN Circular BPS/DIR/2020/004",
+        recommended_action="Freeze all linked accounts. BVN audit.",
+    ),
+    BayesianSignal(
+        name="POS_REVERSAL_ABUSE",
+        severity="high",
+        prior_prob=0.76,
+        likelihood_ratio=14.2,
+        weight=1.3,
+        description="Multiple POS reversal credits — merchant collusion or terminal override.",
+        cbn_reference="CBN POS Guidelines 2023",
+        recommended_action="Suspend merchant terminal. File STR.",
+    ),
+])
+
+BAYESIAN_SIGNAL_MAP = {s.name: s for s in BAYESIAN_SIGNALS}
