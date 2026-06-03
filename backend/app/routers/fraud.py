@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from app.core.scoring_engine import compute_signal_score
-from app.core.decision_engine import apply_decision, drift_monitor, feedback_store
-from app.core.feature_store import compute_behavioral_deviation, update_user_profile
+from app.core.decision_engine import apply_decision, apply_decision_engine, drift_monitor, feedback_store
+from app.core.feature_store import compute_behavioral_deviation
 from app.core.fraud_graph import analyze_graph_risk, record_transaction_edge
 from app.core.compliance import get_required_filings, AuditLogEntry, scrub_pii_for_llm
 from app.core.llm_factory import get_llm_with_fallback
@@ -22,7 +22,7 @@ async def analyze_fraud(req: FraudAnalysisRequest):
     provider = req.provider or settings.default_llm_provider
     tx = req.transaction
 
-    # ── SCORING ENGINE (pure scores, no decisions) ────────────────────────
+    # ── Scoring engine ────────────────────────────────────────────────────
     sig = compute_signal_score(
         amount=tx.amount, channel=tx.channel,
         hour_of_day=tx.timestamp.hour, day_of_week=tx.timestamp.weekday(),
@@ -44,6 +44,7 @@ async def analyze_fraud(req: FraudAnalysisRequest):
         new_beneficiaries_last_hour=getattr(tx, "new_beneficiaries_last_hour", 0),
     )
 
+    # ── Behavioral deviation ──────────────────────────────────────────────
     behavioral = compute_behavioral_deviation(
         user_id=tx.sender_account, amount=tx.amount, channel=tx.channel,
         device_fingerprint=str(tx.device_changed_hours_ago) if tx.device_changed_hours_ago else None,
@@ -51,6 +52,7 @@ async def analyze_fraud(req: FraudAnalysisRequest):
         hour_of_day=tx.timestamp.hour,
     )
 
+    # ── Graph risk ────────────────────────────────────────────────────────
     graph = analyze_graph_risk(
         sender_account=tx.sender_account, recipient_account=tx.recipient_account,
         device_fingerprint=str(tx.device_changed_hours_ago) if tx.device_changed_hours_ago else None,
@@ -58,7 +60,7 @@ async def analyze_fraud(req: FraudAnalysisRequest):
     )
     record_transaction_edge(tx.sender_account, tx.recipient_account, tx.amount)
 
-    # ── DECISION ENGINE (business logic, no scoring) ──────────────────────
+    # ── Decision engine ───────────────────────────────────────────────────
     decision = apply_decision(
         signal_score=sig.score,
         signal_names=[s.name for s in sig.triggered],
@@ -75,28 +77,44 @@ async def analyze_fraud(req: FraudAnalysisRequest):
         signal_names=[s.name for s in sig.triggered] + [p.get("type","") for p in graph["patterns_detected"]],
     )
 
+    # ── LLM narrative — receives evidence, not just signal names ──────────
     safe_ctx = scrub_pii_for_llm({
-        "amount_ngn": tx.amount, "channel": tx.channel, "hour": tx.timestamp.hour,
-        "narration": tx.narration, "composite_score": decision.composite_score,
-        "signal_score": sig.score, "behavioral_score": behavioral["behavioral_deviation_score"],
-        "graph_score": graph["graph_risk_score"],
+        "customer_id": tx.sender_account,          # so LLM knows which customer it's analysing
+        "transaction_id": tx.transaction_id,
+        "amount_ngn": tx.amount,
+        "channel": tx.channel,
+        "hour_of_day": tx.timestamp.hour,
+        "narration": tx.narration,
+        "composite_score": decision.composite_score,
+        "posterior_fraud_probability_pct": round(sig.posterior_fraud_probability * 100, 1),
+        "risk_level": decision.risk_level,
         "behavioral_dominated": decision.behavioral_dominated,
-        "hard_override": decision.hard_override, "signals": [s.name for s in sig.triggered],
-        "graph_patterns": [p["type"] for p in graph["patterns_detected"]],
+        "hard_override": decision.hard_override,
         "cbn_references": sig.cbn_references,
+        # Evidence strings — what actually triggered each signal
+        "signal_evidence": sig.evidence_summary,
+        # Behavioral evidence
+        "behavioral_factors": behavioral.get("factors", []),
+        "behavioral_score": behavioral["behavioral_deviation_score"],
+        # Graph evidence
+        "graph_patterns": [p["type"] + ": " + p["detail"] for p in graph["patterns_detected"]],
+        "graph_score": graph["graph_risk_score"],
     })
 
     llm = get_llm_with_fallback(provider=provider)
     llm_resp = llm.invoke([
         SystemMessage(content=FRAUD_SYSTEM_PROMPT),
         HumanMessage(content=(
-            f"4-layer fraud analysis: {json.dumps(safe_ctx)}\n\n"
-            "Write 3 sentences for a Nigerian fintech compliance officer. "
-            "Mention the composite score and which layer dominated. "
-            "Cite CBN circulars. State the recommended action clearly."
+            f"Fraud analysis for customer {tx.sender_account}, transaction {tx.transaction_id}:\n\n"
+            f"{json.dumps(safe_ctx, indent=2)}\n\n"
+            "Write the compliance officer report using ONLY the evidence provided above. "
+            "Do not add signals or evidence that are not listed. "
+            "If signal_evidence says 'No fraud signals triggered', report that clearly and explain "
+            "which factors contributed to the low risk score."
         )),
     ])
 
+    # ── Audit log ─────────────────────────────────────────────────────────
     audit = AuditLogEntry(
         event_type="fraud_analysis", transaction_id=tx.transaction_id,
         ai_decision=decision.risk_level, risk_score=decision.composite_score,
@@ -107,31 +125,33 @@ async def analyze_fraud(req: FraudAnalysisRequest):
     )
 
     return {
-        "case_id":              str(uuid.uuid4())[:12],
-        "transaction_id":       tx.transaction_id,
-        "composite_score":      decision.composite_score,
-        "risk_level":           decision.risk_level,
-        "decision":             decision.decision,
-        "action":               decision.action,
-        "behavioral_dominated": decision.behavioral_dominated,
-        "hard_override":        decision.hard_override,
-        "override_reason":      decision.override_reason,
-        "layer_breakdown":      decision.layer_breakdown,
-        "analyst_notes":        decision.analyst_notes,
-        "top_3_signals":        sig.top_3,
-        "signal_contributions": sig.contributions,
-        "posterior_fraud_prob":  round(sig.posterior_fraud_probability, 4),
-        "behavioral_deviation": behavioral,
-        "graph_risk":           graph,
-        "regulatory_filings":   [
+        "case_id":                  str(uuid.uuid4())[:12],
+        "transaction_id":           tx.transaction_id,
+        "customer_id":              tx.sender_account,
+        "composite_score":          decision.composite_score,
+        "risk_level":               decision.risk_level,
+        "decision":                 decision.decision,
+        "action":                   decision.action,
+        "posterior_fraud_probability": round(sig.posterior_fraud_probability, 4),
+        "behavioral_dominated":     decision.behavioral_dominated,
+        "hard_override":            decision.hard_override,
+        "override_reason":          decision.override_reason,
+        "layer_breakdown":          decision.layer_breakdown,
+        "analyst_notes":            decision.analyst_notes,
+        "top_3_signals":            sig.top_3,           # includes evidence per signal
+        "signal_evidence_summary":  sig.evidence_summary, # for display
+        "signal_contributions":     sig.contributions,
+        "behavioral_deviation":     behavioral,
+        "graph_risk":               graph,
+        "regulatory_filings":       [
             {"filing_type": f.filing_type, "deadline": f.deadline_description,
              "regulatory_body": f.regulatory_body, "urgency_hours": f.urgency_hours}
             for f in filings
         ],
-        "llm_narrative":        llm_resp.content.strip(),
-        "audit_log_id":         audit.audit_id,
-        "provider_used":        provider,
-        "created_at":           datetime.now(timezone.utc).isoformat(),
+        "llm_narrative":            llm_resp.content.strip(),
+        "audit_log_id":             audit.audit_id,
+        "provider_used":            provider,
+        "created_at":               datetime.now(timezone.utc).isoformat(),
     }
 
 
