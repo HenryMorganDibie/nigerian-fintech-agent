@@ -236,3 +236,7 @@ class FeedbackStore:
 
 drift_monitor = DriftMonitor()
 feedback_store = FeedbackStore()
+
+
+# Backwards-compatibility alias
+apply_decision_engine = apply_decision

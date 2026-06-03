@@ -6,7 +6,7 @@ from app.core.nigeria_intelligence import evaluate_transaction
 from app.core.bayesian_scorer import bayesian_fraud_score
 from app.core.feature_store import compute_behavioral_deviation
 from app.core.fraud_graph import analyze_graph_risk, record_transaction_edge
-from app.core.decision_engine import apply_decision_engine
+from app.core.decision_engine import apply_decision as apply_decision_engine
 from app.core.explainability import build_explainability_report
 from app.core.compliance import get_required_filings, AuditLogEntry
 from app.core.config import settings
@@ -62,8 +62,8 @@ async def run_simulation(req: SimulationRequest):
     graph = analyze_graph_risk(tx.sender_account, tx.recipient_account, amount=tx.amount)
     record_transaction_edge(tx.sender_account, tx.recipient_account, tx.amount)
     decision = apply_decision_engine(
-        bayesian_score=bayes.risk_score,
-        bayesian_signals=triggered,
+        signal_score=bayes.risk_score,
+        signal_names=triggered,
         behavioral_score=behavioral["behavioral_deviation_score"],
         graph_score=graph["graph_risk_score"],
         amount=tx.amount,
