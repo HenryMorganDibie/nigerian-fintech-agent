@@ -1,7 +1,6 @@
 """
 NaijaFinAI Agent — LangChain 1.x compatible
 Uses bind_tools + manual tool-call loop (no AgentExecutor needed).
-Works on LangChain >=0.3 and 1.x.
 """
 
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
@@ -9,18 +8,26 @@ from app.core.llm_factory import get_llm, get_llm_with_fallback
 from app.core.prompts import BASE_SYSTEM_PROMPT
 from app.core.language import detect_language, LANGUAGE_INSTRUCTIONS, enrich_context_with_glossary
 from app.core.compliance import AuditLogEntry
-from app.tools.fintech_tools import AGENT_TOOLS, nigerian_fraud_score, cbn_loan_eligibility, naija_spending_insights
+from app.tools.fintech_tools import (
+    AGENT_TOOLS,
+    nigerian_fraud_score,
+    cbn_loan_eligibility,
+    naija_spending_insights,
+    fetch_url_content,
+    web_search,
+)
 from app.models.schemas import ChatMessage
 from app.core.config import settings
 from datetime import datetime, timezone, timedelta
 from typing import AsyncGenerator
 import json, uuid
 
-# Tool name -> callable map
 TOOL_MAP = {
-    "nigerian_fraud_score":   nigerian_fraud_score,
-    "cbn_loan_eligibility":   cbn_loan_eligibility,
+    "nigerian_fraud_score":    nigerian_fraud_score,
+    "cbn_loan_eligibility":    cbn_loan_eligibility,
     "naija_spending_insights": naija_spending_insights,
+    "fetch_url_content":       fetch_url_content,
+    "web_search":              web_search,
 }
 
 
@@ -74,16 +81,13 @@ def run_agent(
 
     tool_calls_made = []
 
-    # Tool-call loop — max 5 iterations
     for _ in range(5):
         response = llm_with_tools.invoke(messages)
         messages.append(response)
 
-        # No tool calls — we have the final answer
         if not getattr(response, "tool_calls", None):
             break
 
-        # Execute each tool call
         for tc in response.tool_calls:
             tool_name = tc["name"]
             tool_args = tc["args"]

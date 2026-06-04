@@ -313,4 +313,147 @@ def naija_spending_insights(
     })
 
 
-AGENT_TOOLS = [nigerian_fraud_score, cbn_loan_eligibility, naija_spending_insights]
+
+
+@tool
+def fetch_url_content(url: str) -> str:
+    """
+    Fetch and read the content of a URL. Use this whenever the user shares a link.
+    Works for GitHub repos, news articles, web pages, documentation, and any public URL.
+    Do NOT use the fraud scoring tools on a URL — always fetch the URL first.
+
+    Args:
+        url: The full URL to fetch (must start with http:// or https://)
+
+    Returns:
+        The page title, description, and main text content (truncated to 3000 chars).
+    """
+    import httpx, re
+
+    if not url.startswith(("http://", "https://")):
+        return json.dumps({"error": "Invalid URL — must start with http:// or https://"})
+
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; NaijaFinAI/1.0)",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        r = httpx.get(url, headers=headers, timeout=10, follow_redirects=True)
+        r.raise_for_status()
+
+        text = r.text
+
+        # Extract title
+        title_match = re.search(r"<title[^>]*>(.*?)</title>", text, re.IGNORECASE | re.DOTALL)
+        title = title_match.group(1).strip() if title_match else "No title"
+
+        # Extract meta description
+        desc_match = re.search(r'<meta[^>]+name=["\']description["\'][^>]+content=["\'](.*?)["\']',
+                                text, re.IGNORECASE)
+        description = desc_match.group(1).strip() if desc_match else ""
+
+        # Strip HTML tags for content
+        clean = re.sub(r"<script[^>]*>.*?</script>", "", text, flags=re.DOTALL | re.IGNORECASE)
+        clean = re.sub(r"<style[^>]*>.*?</style>", "", clean, flags=re.DOTALL | re.IGNORECASE)
+        clean = re.sub(r"<[^>]+>", " ", clean)
+        clean = re.sub(r"\s+", " ", clean).strip()
+
+        # For GitHub repos, extract README-like content
+        if "github.com" in url:
+            # Try to get README via GitHub API
+            parts = url.rstrip("/").split("github.com/")
+            if len(parts) > 1:
+                repo_path = parts[1].split("/tree/")[0].split("/blob/")[0]
+                api_url = f"https://api.github.com/repos/{repo_path}/readme"
+                try:
+                    api_r = httpx.get(api_url, headers={**headers, "Accept": "application/vnd.github.v3.raw"}, timeout=8)
+                    if api_r.status_code == 200:
+                        readme = api_r.text[:3000]
+                        return json.dumps({
+                            "url": url,
+                            "title": title,
+                            "type": "github_repository",
+                            "readme_content": readme,
+                            "note": "README fetched via GitHub API",
+                        })
+                except Exception:
+                    pass
+
+        return json.dumps({
+            "url": url,
+            "title": title,
+            "description": description,
+            "content": clean[:3000],
+            "content_length": len(clean),
+        })
+
+    except httpx.TimeoutException:
+        return json.dumps({"error": f"Request timed out fetching {url}"})
+    except httpx.HTTPStatusError as e:
+        return json.dumps({"error": f"HTTP {e.response.status_code} from {url}"})
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@tool
+def web_search(query: str) -> str:
+    """
+    Search the web for current information. Use this when:
+    - The user asks about recent news, events, or data
+    - You need to look up a company, regulation, or topic
+    - The user asks a question that requires up-to-date information
+    - You need to verify facts about Nigerian fintechs, CBN regulations, or fraud trends
+
+    Args:
+        query: The search query string
+
+    Returns:
+        Top search results with titles, URLs, and snippets.
+    """
+    import httpx
+
+    try:
+        # Use DuckDuckGo instant answer API (no key needed)
+        r = httpx.get(
+            "https://api.duckduckgo.com/",
+            params={"q": query, "format": "json", "no_html": "1", "skip_disambig": "1"},
+            headers={"User-Agent": "NaijaFinAI/1.0"},
+            timeout=8,
+        )
+        data = r.json()
+
+        results = []
+
+        # Abstract (main answer)
+        if data.get("AbstractText"):
+            results.append({
+                "type": "answer",
+                "text": data["AbstractText"],
+                "source": data.get("AbstractSource", ""),
+                "url": data.get("AbstractURL", ""),
+            })
+
+        # Related topics
+        for topic in data.get("RelatedTopics", [])[:5]:
+            if isinstance(topic, dict) and topic.get("Text"):
+                results.append({
+                    "type": "related",
+                    "text": topic["Text"],
+                    "url": topic.get("FirstURL", ""),
+                })
+
+        if not results:
+            return json.dumps({
+                "query": query,
+                "results": [],
+                "note": "No results found. Try a more specific query or use fetch_url_content with a direct URL.",
+            })
+
+        return json.dumps({"query": query, "results": results})
+
+    except Exception as e:
+        return json.dumps({"error": str(e), "query": query})
+
+
+AGENT_TOOLS = [nigerian_fraud_score, cbn_loan_eligibility, naija_spending_insights,
+               fetch_url_content, web_search]
