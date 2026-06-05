@@ -171,7 +171,7 @@ NaijaFinAI fills this gap with infrastructure built natively for this ecosystem.
 
 **Pidgin fraud query (Chat tab):**
 ```
-Abeg, my account show ₦85,000 USSD transfer 3am. I never send nobody. 
+Abeg, my account show ₦85,000 USSD transfer 3am. I never send nobody.
 E happen after I change SIM yesterday.
 ```
 
