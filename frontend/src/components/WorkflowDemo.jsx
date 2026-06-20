@@ -1,21 +1,21 @@
 import { useState } from "react";
 import { runWorkflow } from "../utils/api";
-import { Play, CheckCircle, AlertTriangle, Info, Zap, Loader } from "lucide-react";
+import { Play, Check, TriangleAlert, Info, Siren, Loader, Landmark, Store, Search } from "lucide-react";
 
 const SCENARIOS = [
-  { id: "loan_application_fraud_check", label: "Loan Application Fraud", emoji: "💰", desc: "First-party fraud detection on digital loan disbursements" },
-  { id: "agent_wallet_monitoring",      label: "Agent Wallet Monitor",  emoji: "🏪", desc: "Mule chain detection through OPay/Moniepoint agent networks" },
-  { id: "chargeback_investigation",     label: "Chargeback Investigation", emoji: "🔍", desc: "SIM swap + device change analysis for disputed transactions" },
+  { id: "loan_application_fraud_check", label: "Loan application fraud",   Icon: Landmark, desc: "First-party fraud on a digital loan disbursement" },
+  { id: "agent_wallet_monitoring",      label: "Agent wallet monitor",     Icon: Store,    desc: "Mule chain detection through agent-network terminals" },
+  { id: "chargeback_investigation",     label: "Chargeback investigation", Icon: Search,   desc: "SIM swap and device-change analysis on a dispute" },
 ];
 
 const STATUS_ICONS = {
-  pass:   <CheckCircle size={13} color="var(--jade)" />,
-  alert:  <AlertTriangle size={13} color="var(--gold)" />,
-  action: <Zap size={13} color="var(--ember)" />,
-  info:   <Info size={13} color="var(--sky)" />,
+  pass:   <Check size={13} color="var(--stamp-green)" strokeWidth={2.25} />,
+  alert:  <TriangleAlert size={13} color="var(--stamp-amber)" strokeWidth={2} />,
+  action: <Siren size={13} color="var(--stamp-rust)" strokeWidth={2} />,
+  info:   <Info size={13} color="var(--ink-faint)" strokeWidth={2} />,
 };
 
-const RISK_COLORS = { low: "var(--jade)", medium: "var(--gold)", high: "#FF8800", critical: "var(--ember)" };
+const RISK_COLORS = { low: "var(--stamp-green)", medium: "var(--stamp-amber)", high: "var(--stamp-rust)", critical: "var(--stamp-rust)" };
 
 export function WorkflowDemo({ provider }) {
   const [active, setActive] = useState(null);
@@ -34,84 +34,80 @@ export function WorkflowDemo({ provider }) {
   };
 
   return (
-    <div style={{ padding: 20, overflowY: "auto", height: "100%" }}>
+    <div style={{ padding: 22, overflowY: "auto", height: "100%", maxWidth: 880 }}>
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontFamily: "Syne", fontWeight: 700, fontSize: 16, color: "var(--white)" }}>Workflow Demos</div>
-        <div style={{ fontSize: 11, color: "var(--muted)" }}>One-click end-to-end fintech fraud scenarios with case output</div>
+        <div className="font-display" style={{ fontSize: 19, color: "var(--ink)" }}>Workflow demonstrations</div>
+        <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 3 }}>End-to-end fintech fraud scenarios, each producing a full case file</div>
       </div>
 
-      {/* Scenario buttons */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-        {SCENARIOS.map(s => (
-          <button key={s.id} onClick={() => run(s.id)} disabled={loading}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 22 }}>
+        {SCENARIOS.map(({ id, label, Icon, desc }) => (
+          <button key={id} onClick={() => run(id)} disabled={loading}
             style={{
               display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "12px 14px", borderRadius: 10, cursor: "pointer",
-              background: active === s.id ? "var(--jade-dim)" : "var(--ink-2)",
-              border: `1px solid ${active === s.id ? "#00E67650" : "var(--border)"}`,
-              transition: "all 0.15s", textAlign: "left",
+              padding: "13px 15px", borderRadius: 4, cursor: "pointer",
+              background: active === id ? "var(--paper-2)" : "var(--card)",
+              border: `1px solid ${active === id ? "var(--ink-faint)" : "var(--rule-bold)"}`,
+              borderLeft: active === id ? "4px solid var(--ink)" : "4px solid var(--rule-bold)",
+              transition: "background 0.15s, border-color 0.15s", textAlign: "left",
             }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 18 }}>{s.emoji}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+              <Icon size={17} strokeWidth={1.75} color="var(--ink-soft)" />
               <div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--white)" }}>{s.label}</div>
-                <div style={{ fontSize: 10, color: "var(--muted)" }}>{s.desc}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{label}</div>
+                <div style={{ fontSize: 11, color: "var(--ink-faint)" }}>{desc}</div>
               </div>
             </div>
-            {loading && active === s.id
-              ? <Loader size={14} color="var(--jade)" className="animate-spin" />
-              : <Play size={13} color="var(--jade)" />}
+            {loading && active === id
+              ? <Loader size={14} color="var(--ink-soft)" className="animate-spin" />
+              : <Play size={13} color="var(--ink-faint)" />}
           </button>
         ))}
       </div>
 
-      {/* Result */}
       {result && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontFamily: "Syne", fontWeight: 700, fontSize: 13, color: "var(--white)" }}>{result.scenario_name}</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div className="font-display" style={{ fontSize: 15, color: "var(--ink)" }}>{result.scenario_name}</div>
 
-          {/* Steps */}
           {result.steps?.map(step => (
-            <div key={step.step} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 12px", background: "var(--ink-2)", borderRadius: 8, border: "1px solid var(--border)" }}>
+            <div key={step.step} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 12px", background: "var(--card)", borderRadius: 4, border: "1px solid var(--rule-bold)" }}>
               <div style={{ marginTop: 1 }}>{STATUS_ICONS[step.status] || STATUS_ICONS.info}</div>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--white)", marginBottom: 2 }}>Step {step.step}: {step.name}</div>
-                <div style={{ fontSize: 11, color: "var(--muted)" }}>{step.result}</div>
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink)", marginBottom: 2 }}>Step {step.step}, {step.name}</div>
+                <div style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>{step.result}</div>
               </div>
             </div>
           ))}
 
-          {/* Verdict */}
-          <div style={{ padding: "12px 14px", background: "var(--ember-dim, #FF444410)", border: "1px solid #FF444430", borderRadius: 10 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ember)", marginBottom: 4 }}>VERDICT</div>
-            <div style={{ fontSize: 12, color: "var(--text)" }}>{result.final_verdict}</div>
+          <div className="case-tab" style={{ borderRadius: 4, padding: "12px 14px", borderLeftColor: "var(--stamp-rust)" }}>
+            <div className="font-mono" style={{ fontSize: 10.5, fontWeight: 700, color: "var(--stamp-rust)", marginBottom: 4, letterSpacing: "0.04em", textTransform: "uppercase" }}>Verdict</div>
+            <div style={{ fontSize: 12.5, color: "var(--ink)" }}>{result.final_verdict}</div>
           </div>
 
-          {/* Case output */}
           {result.case_output && (
-            <div style={{ padding: "12px 14px", background: "var(--ink-2)", border: "1px solid var(--border)", borderRadius: 10 }}>
-              <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 8, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Case Output</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
+            <div className="case-tab" style={{ borderRadius: 4, padding: "13px 15px" }}>
+              <div style={{ fontSize: 10.5, color: "var(--ink-faint)", marginBottom: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Case file</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 11 }}>
                 <div>
-                  <div style={{ fontSize: 9, color: "var(--muted)" }}>Risk Score</div>
-                  <div style={{ fontFamily: "IBM Plex Mono", fontWeight: 700, fontSize: 18, color: RISK_COLORS[result.case_output.risk_level] }}>
+                  <div style={{ fontSize: 10, color: "var(--ink-faint)" }}>Risk score</div>
+                  <div className="font-mono" style={{ fontWeight: 700, fontSize: 19, color: RISK_COLORS[result.case_output.risk_level] }}>
                     {result.case_output.risk_score}/100
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 9, color: "var(--muted)" }}>Fraud Probability</div>
-                  <div style={{ fontFamily: "IBM Plex Mono", fontWeight: 700, fontSize: 18, color: RISK_COLORS[result.case_output.risk_level] }}>
+                  <div style={{ fontSize: 10, color: "var(--ink-faint)" }}>Fraud probability</div>
+                  <div className="font-mono" style={{ fontWeight: 700, fontSize: 19, color: RISK_COLORS[result.case_output.risk_level] }}>
                     {(result.case_output.posterior_fraud_probability * 100).toFixed(1)}%
                   </div>
                 </div>
               </div>
               {result.case_output.top_3_signals?.map(sig => (
-                <div key={sig.name} style={{ fontSize: 10, padding: "4px 0", borderTop: "1px solid var(--border)", color: "var(--muted)" }}>
-                  #{sig.rank} <span style={{ fontFamily: "IBM Plex Mono", color: "var(--jade)" }}>{sig.name}</span> — {sig.description.slice(0, 60)}…
+                <div key={sig.name} style={{ fontSize: 11, padding: "5px 0", borderTop: "1px solid var(--rule)", color: "var(--ink-soft)" }}>
+                  #{sig.rank} <span className="font-mono" style={{ color: "var(--ink)" }}>{sig.name}</span>, {sig.description.slice(0, 60)}
                 </div>
               ))}
-              <div style={{ fontSize: 9, marginTop: 8, fontFamily: "IBM Plex Mono", color: "var(--muted)" }}>
-                Audit: {result.case_output.audit_log_id?.slice(0, 12)}
+              <div className="font-mono" style={{ fontSize: 9.5, marginTop: 9, color: "var(--ink-faint)" }}>
+                audit {result.case_output.audit_log_id?.slice(0, 12)}
               </div>
             </div>
           )}

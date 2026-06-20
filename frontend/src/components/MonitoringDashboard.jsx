@@ -18,15 +18,15 @@ async function submitFeedback(payload) {
 }
 
 const STATUS_COLORS = {
-  STABLE:         "var(--jade)",
-  DRIFT_DETECTED: "var(--ember)",
-  insufficient_data: "var(--muted)",
+  STABLE:         "var(--stamp-green)",
+  DRIFT_DETECTED: "var(--stamp-rust)",
+  insufficient_data: "var(--ink-faint)",
 };
 
 const OUTCOMES = [
-  { value: "fraud_confirmed",    label: "✅ Fraud Confirmed",    color: "var(--ember)" },
-  { value: "fraud_rejected",     label: "❌ Not Fraud",          color: "var(--jade)" },
-  { value: "false_positive",     label: "⚠️ False Positive",     color: "var(--gold)" },
+  { value: "fraud_confirmed",    label: "✅ Fraud Confirmed",    color: "var(--stamp-rust)" },
+  { value: "fraud_rejected",     label: "❌ Not Fraud",          color: "var(--stamp-green)" },
+  { value: "false_positive",     label: "⚠️ False Positive",     color: "var(--stamp-amber)" },
   { value: "chargeback_confirmed", label: "🔄 Chargeback",       color: "#8B5CF6" },
 ];
 
@@ -62,15 +62,15 @@ export function MonitoringDashboard() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div>
-          <div style={{ fontFamily: "Syne", fontWeight: 700, fontSize: 16, color: "var(--white)" }}>
+          <div style={{ fontFamily: "Source Serif 4", fontWeight: 700, fontSize: 16, color: "var(--ink)" }}>
             Monitoring & Drift Detection
           </div>
-          <div style={{ fontSize: 11, color: "var(--muted)" }}>
+          <div style={{ fontSize: 11, color: "var(--ink-faint)" }}>
             PSI drift · fraud rate · false positive tracking · analyst feedback
           </div>
         </div>
         <button onClick={load} disabled={loading}
-          style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", cursor: "pointer", color: "var(--muted)", fontSize: 11 }}>
+          style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "1px solid var(--rule-bold)", background: "transparent", cursor: "pointer", color: "var(--ink-faint)", fontSize: 11 }}>
           <RefreshCw size={12} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} /> Refresh
         </button>
       </div>
@@ -79,15 +79,15 @@ export function MonitoringDashboard() {
       {drift && (
         <div style={{ padding: "12px 16px", borderRadius: 10, marginBottom: 16, border: `1px solid ${STATUS_COLORS[driftStatus]}40`, background: `${STATUS_COLORS[driftStatus]}10`, display: "flex", alignItems: "center", gap: 10 }}>
           {driftStatus === "STABLE"
-            ? <CheckCircle size={16} color="var(--jade)" />
+            ? <CheckCircle size={16} color="var(--stamp-green)" />
             : driftStatus === "DRIFT_DETECTED"
-            ? <AlertTriangle size={16} color="var(--ember)" />
-            : <Activity size={16} color="var(--muted)" />}
+            ? <AlertTriangle size={16} color="var(--stamp-rust)" />
+            : <Activity size={16} color="var(--ink-faint)" />}
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: STATUS_COLORS[driftStatus] }}>
               {driftStatus === "STABLE" ? "System Stable" : driftStatus === "DRIFT_DETECTED" ? "Drift Detected" : "Collecting Data"}
             </div>
-            <div style={{ fontSize: 10, color: "var(--muted)" }}>
+            <div style={{ fontSize: 10, color: "var(--ink-faint)" }}>
               {drift.window_size} decisions analysed · PSI {drift.psi_score ?? "—"} · FP rate {drift.false_positive_rate != null ? (drift.false_positive_rate * 100).toFixed(1) + "%" : "—"}
             </div>
           </div>
@@ -102,10 +102,10 @@ export function MonitoringDashboard() {
             { label: "PSI Score",      val: drift.psi_score?.toFixed(3) ?? "—",       unit: drift.psi_score > 0.25 ? " ⚠️" : " ✅" },
             { label: "Confirmed Fraud",val: drift.confirmed_fraud_count ?? 0,          unit: " cases" },
           ].map(({ label, val, unit }) => (
-            <div key={label} style={{ background: "var(--ink-2)", border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px" }}>
-              <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>{label}</div>
-              <div style={{ fontFamily: "IBM Plex Mono", fontWeight: 700, fontSize: 18, color: "var(--white)" }}>
-                {val}<span style={{ fontSize: 11, color: "var(--muted)" }}>{unit}</span>
+            <div key={label} style={{ background: "var(--card)", border: "1px solid var(--rule-bold)", borderRadius: 10, padding: "12px 14px" }}>
+              <div style={{ fontSize: 10, color: "var(--ink-faint)", marginBottom: 4 }}>{label}</div>
+              <div style={{ fontFamily: "Roboto Mono", fontWeight: 700, fontSize: 18, color: "var(--ink)" }}>
+                {val}<span style={{ fontSize: 11, color: "var(--ink-faint)" }}>{unit}</span>
               </div>
             </div>
           ))}
@@ -115,14 +115,14 @@ export function MonitoringDashboard() {
       {/* Drift alerts */}
       {drift?.drift_alerts?.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "var(--ember)", fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          <div style={{ fontSize: 11, color: "var(--stamp-rust)", fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>
             ⚠️ Drift Alerts
           </div>
           {drift.drift_alerts.map((a, i) => (
             <div key={i} style={{ padding: "10px 14px", background: "#FF444410", border: "1px solid #FF444430", borderRadius: 8, marginBottom: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ember)", marginBottom: 4 }}>{a.type}</div>
-              <div style={{ fontSize: 11, color: "var(--text)", marginBottom: 4 }}>{a.detail}</div>
-              <div style={{ fontSize: 10, color: "var(--jade)", fontStyle: "italic" }}>→ {a.recommendation}</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--stamp-rust)", marginBottom: 4 }}>{a.type}</div>
+              <div style={{ fontSize: 11, color: "var(--ink)", marginBottom: 4 }}>{a.detail}</div>
+              <div style={{ fontSize: 10, color: "var(--stamp-green)", fontStyle: "italic" }}>→ {a.recommendation}</div>
             </div>
           ))}
         </div>
@@ -131,14 +131,14 @@ export function MonitoringDashboard() {
       {/* Signal frequency alerts */}
       {drift?.signal_frequency_alerts?.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "var(--gold)", fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          <div style={{ fontSize: 11, color: "var(--stamp-amber)", fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>
             Signal Frequency Alerts
           </div>
           {drift.signal_frequency_alerts.map((a, i) => (
-            <div key={i} style={{ padding: "8px 12px", background: "var(--gold-dim, #FFB30010)", border: "1px solid #FFB30030", borderRadius: 8, marginBottom: 6 }}>
-              <span style={{ fontFamily: "IBM Plex Mono", fontSize: 10, color: "var(--gold)" }}>{a.signal}</span>
-              <span style={{ fontSize: 10, color: "var(--muted)", marginLeft: 8 }}>hit rate: {(a.recent_hit_rate * 100).toFixed(1)}%</span>
-              <div style={{ fontSize: 10, color: "var(--text)", marginTop: 3 }}>{a.alert}</div>
+            <div key={i} style={{ padding: "8px 12px", background: "var(--stamp-amber-wash)", border: "1px solid #FFB30030", borderRadius: 8, marginBottom: 6 }}>
+              <span style={{ fontFamily: "Roboto Mono", fontSize: 10, color: "var(--stamp-amber)" }}>{a.signal}</span>
+              <span style={{ fontSize: 10, color: "var(--ink-faint)", marginLeft: 8 }}>hit rate: {(a.recent_hit_rate * 100).toFixed(1)}%</span>
+              <div style={{ fontSize: 10, color: "var(--ink)", marginTop: 3 }}>{a.alert}</div>
             </div>
           ))}
         </div>
@@ -146,7 +146,7 @@ export function MonitoringDashboard() {
 
       {/* Insufficient data state */}
       {drift?.status === "insufficient_data" && (
-        <div style={{ textAlign: "center", padding: "30px 20px", color: "var(--muted)", fontSize: 13 }}>
+        <div style={{ textAlign: "center", padding: "30px 20px", color: "var(--ink-faint)", fontSize: 13 }}>
           <Activity size={28} style={{ marginBottom: 10, opacity: 0.4 }} />
           <div>Need at least 20 fraud analyses to start drift detection.</div>
           <div style={{ fontSize: 11, marginTop: 6 }}>Use the Workflows tab or run fraud analyses to build up history.</div>
@@ -154,26 +154,26 @@ export function MonitoringDashboard() {
       )}
 
       {/* Analyst Feedback Loop */}
-      <div style={{ background: "var(--ink-2)", border: "1px solid var(--border)", borderRadius: 12, padding: 16, marginTop: 8 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--white)", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
-          <TrendingUp size={13} color="var(--jade)" /> Analyst Feedback Loop
+      <div style={{ background: "var(--card)", border: "1px solid var(--rule-bold)", borderRadius: 12, padding: 16, marginTop: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+          <TrendingUp size={13} color="var(--stamp-green)" /> Analyst Feedback Loop
         </div>
-        <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 14 }}>
+        <div style={{ fontSize: 10, color: "var(--ink-faint)", marginBottom: 14 }}>
           Submit real-world outcomes to improve signal weights and update Bayesian priors
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <input value={feedback.transaction_id} onChange={e => setFeedback(f => ({ ...f, transaction_id: e.target.value }))}
             placeholder="Transaction ID"
-            style={{ background: "var(--ink-3)", border: "1px solid var(--border-bright)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "var(--text)", outline: "none", fontFamily: "IBM Plex Mono" }} />
+            style={{ background: "var(--paper-2)", border: "1px solid var(--ink-faint)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "var(--ink)", outline: "none", fontFamily: "Roboto Mono" }} />
           <input value={feedback.audit_id} onChange={e => setFeedback(f => ({ ...f, audit_id: e.target.value }))}
             placeholder="Audit Log ID (from case output)"
-            style={{ background: "var(--ink-3)", border: "1px solid var(--border-bright)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "var(--text)", outline: "none", fontFamily: "IBM Plex Mono" }} />
+            style={{ background: "var(--paper-2)", border: "1px solid var(--ink-faint)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "var(--ink)", outline: "none", fontFamily: "Roboto Mono" }} />
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {OUTCOMES.map(o => (
               <button key={o.value} onClick={() => setFeedback(f => ({ ...f, outcome: o.value }))}
-                style={{ padding: "8px 10px", borderRadius: 8, border: `1px solid ${feedback.outcome === o.value ? o.color : "var(--border)"}`, background: feedback.outcome === o.value ? `${o.color}15` : "transparent", cursor: "pointer", fontSize: 11, color: feedback.outcome === o.value ? o.color : "var(--muted)", transition: "all 0.15s", textAlign: "left" }}>
+                style={{ padding: "8px 10px", borderRadius: 8, border: `1px solid ${feedback.outcome === o.value ? o.color : "var(--rule-bold)"}`, background: feedback.outcome === o.value ? `${o.color}15` : "transparent", cursor: "pointer", fontSize: 11, color: feedback.outcome === o.value ? o.color : "var(--ink-faint)", transition: "all 0.15s", textAlign: "left" }}>
                 {o.label}
               </button>
             ))}
@@ -181,7 +181,7 @@ export function MonitoringDashboard() {
 
           <input value={feedback.notes} onChange={e => setFeedback(f => ({ ...f, notes: e.target.value }))}
             placeholder="Analyst notes (optional)"
-            style={{ background: "var(--ink-3)", border: "1px solid var(--border-bright)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "var(--text)", outline: "none" }} />
+            style={{ background: "var(--paper-2)", border: "1px solid var(--ink-faint)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "var(--ink)", outline: "none" }} />
 
           <button onClick={handleFeedback} disabled={fbLoading || !feedback.transaction_id}
             className="btn-primary" style={{ padding: "10px 0", borderRadius: 10, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
@@ -190,10 +190,10 @@ export function MonitoringDashboard() {
         </div>
 
         {fbResult && (
-          <div style={{ marginTop: 12, padding: "10px 12px", background: fbResult.error ? "#FF444415" : "var(--jade-dim)", borderRadius: 8 }}>
+          <div style={{ marginTop: 12, padding: "10px 12px", background: fbResult.error ? "#FF444415" : "var(--stamp-green-wash)", borderRadius: 8 }}>
             {fbResult.error
-              ? <div style={{ fontSize: 11, color: "var(--ember)" }}>{fbResult.error}</div>
-              : <div style={{ fontSize: 11, color: "var(--jade)" }}>
+              ? <div style={{ fontSize: 11, color: "var(--stamp-rust)" }}>{fbResult.error}</div>
+              : <div style={{ fontSize: 11, color: "var(--stamp-green)" }}>
                   ✅ Recorded · Total feedback: {fbResult.feedback_summary?.total_feedback} · FP rate: {((fbResult.feedback_summary?.false_positive_rate || 0) * 100).toFixed(1)}%
                 </div>
             }

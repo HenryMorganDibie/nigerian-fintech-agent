@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { runEval } from "../utils/api";
-import { BarChart2, CheckCircle, XCircle, Loader } from "lucide-react";
+import { GaugeCircle, Check, X, Loader } from "lucide-react";
 
 export function EvalDashboard({ provider }) {
   const [result, setResult] = useState(null);
@@ -15,79 +15,78 @@ export function EvalDashboard({ provider }) {
     finally { setLoading(false); }
   };
 
+  const tone = (v) => v > 0.8 ? "var(--stamp-green)" : v > 0.6 ? "var(--stamp-amber)" : "var(--stamp-rust)";
+
   const bar = (val) => (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <div style={{ flex: 1, background: "var(--border)", borderRadius: 4, height: 6 }}>
-        <div style={{ width: `${val * 100}%`, background: val > 0.8 ? "var(--jade)" : val > 0.6 ? "var(--gold)" : "var(--ember)", height: "100%", borderRadius: 4, transition: "width 0.6s" }} />
+      <div style={{ flex: 1, background: "var(--rule)", borderRadius: 2, height: 5 }}>
+        <div style={{ width: `${val * 100}%`, background: tone(val), height: "100%", borderRadius: 2, transition: "width 0.5s" }} />
       </div>
-      <span style={{ fontSize: 11, fontFamily: "IBM Plex Mono", color: "var(--text)", minWidth: 36 }}>{(val * 100).toFixed(1)}%</span>
+      <span className="font-mono" style={{ fontSize: 11, color: "var(--ink-soft)", minWidth: 38 }}>{(val * 100).toFixed(1)}%</span>
     </div>
   );
 
   return (
-    <div style={{ padding: 20, overflowY: "auto", height: "100%" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+    <div style={{ padding: 22, overflowY: "auto", height: "100%", maxWidth: 880 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 22 }}>
         <div>
-          <div style={{ fontFamily: "Syne", fontWeight: 700, fontSize: 16, color: "var(--white)" }}>Signal Evaluation</div>
-          <div style={{ fontSize: 11, color: "var(--muted)" }}>40-sample synthetic Nigerian fraud dataset · Bayesian scorer</div>
+          <div className="font-display" style={{ fontSize: 19, color: "var(--ink)" }}>Signal evaluation</div>
+          <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 3 }}>40-sample synthetic Nigerian fraud dataset, scored against the Bayesian engine</div>
         </div>
         <button onClick={run} disabled={loading} className="btn-primary"
-          style={{ padding: "8px 16px", borderRadius: 8, fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}>
-          {loading ? <><Loader size={13} className="animate-spin" /> Running…</> : <><BarChart2 size={13} /> Run Eval</>}
+          style={{ padding: "8px 16px", borderRadius: 4, fontSize: 12.5, display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
+          {loading ? <><Loader size={13} className="animate-spin" /> Running</> : <><GaugeCircle size={13} /> Run evaluation</>}
         </button>
       </div>
 
       {result && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Overall metrics */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
             {[
               { label: "Accuracy",  val: result.accuracy },
               { label: "Precision", val: result.overall_precision },
               { label: "Recall",    val: result.overall_recall },
-              { label: "F1 Score",  val: result.overall_f1 },
+              { label: "F1 score",  val: result.overall_f1 },
             ].map(({ label, val }) => (
-              <div key={label} style={{ background: "var(--ink-2)", border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px" }}>
-                <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>{label}</div>
-                <div style={{ fontFamily: "Syne", fontWeight: 700, fontSize: 22, color: val > 0.8 ? "var(--jade)" : val > 0.6 ? "var(--gold)" : "var(--ember)" }}>
+              <div key={label} className="case-tab" style={{ borderRadius: 4, padding: "12px 14px", borderLeftColor: tone(val) }}>
+                <div style={{ fontSize: 10.5, color: "var(--ink-faint)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
+                <div className="font-display" style={{ fontSize: 23, color: tone(val) }}>
                   {(val * 100).toFixed(1)}%
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Confusion matrix */}
-          <div style={{ background: "var(--ink-2)", border: "1px solid var(--border)", borderRadius: 10, padding: "14px 16px" }}>
-            <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 10, fontWeight: 600 }}>Confusion Matrix</div>
+          <div className="case-tab" style={{ borderRadius: 4, padding: "14px 16px" }}>
+            <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 11, fontWeight: 600 }}>Confusion matrix</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               {[
-                { label: "True Positives",  val: result.confusion_matrix.TP, good: true },
-                { label: "False Positives", val: result.confusion_matrix.FP, good: false },
-                { label: "True Negatives",  val: result.confusion_matrix.TN, good: true },
-                { label: "False Negatives", val: result.confusion_matrix.FN, good: false },
+                { label: "True positives",  val: result.confusion_matrix.TP, good: true },
+                { label: "False positives", val: result.confusion_matrix.FP, good: false },
+                { label: "True negatives",  val: result.confusion_matrix.TN, good: true },
+                { label: "False negatives", val: result.confusion_matrix.FN, good: false },
               ].map(({ label, val, good }) => (
-                <div key={label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "var(--ink-3)", borderRadius: 8 }}>
-                  {good ? <CheckCircle size={14} color="var(--jade)" /> : <XCircle size={14} color="var(--ember)" />}
+                <div key={label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: "var(--paper-2)", borderRadius: 4 }}>
+                  {good ? <Check size={14} color="var(--stamp-green)" strokeWidth={2.25} /> : <X size={14} color="var(--stamp-rust)" strokeWidth={2.25} />}
                   <div>
-                    <div style={{ fontSize: 10, color: "var(--muted)" }}>{label}</div>
-                    <div style={{ fontFamily: "IBM Plex Mono", fontWeight: 600, color: "var(--white)" }}>{val}</div>
+                    <div style={{ fontSize: 10.5, color: "var(--ink-faint)" }}>{label}</div>
+                    <div className="font-mono" style={{ fontWeight: 600, color: "var(--ink)" }}>{val}</div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Per-signal table */}
-          <div style={{ background: "var(--ink-2)", border: "1px solid var(--border)", borderRadius: 10, padding: "14px 16px" }}>
-            <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 12, fontWeight: 600 }}>Per-Signal Metrics</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div className="case-tab" style={{ borderRadius: 4, padding: "14px 16px" }}>
+            <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 13, fontWeight: 600 }}>Per-signal metrics</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
               {result.per_signal_metrics.map(s => (
-                <div key={s.signal} style={{ borderBottom: "1px solid var(--border)", paddingBottom: 10 }}>
-                  <div style={{ fontSize: 11, fontFamily: "IBM Plex Mono", color: "var(--jade)", marginBottom: 6 }}>{s.signal}</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-                    <div><div style={{ fontSize: 9, color: "var(--muted)" }}>Precision</div>{bar(s.precision)}</div>
-                    <div><div style={{ fontSize: 9, color: "var(--muted)" }}>Recall</div>{bar(s.recall)}</div>
-                    <div><div style={{ fontSize: 9, color: "var(--muted)" }}>F1</div>{bar(s.f1)}</div>
+                <div key={s.signal} style={{ borderBottom: "1px solid var(--rule)", paddingBottom: 11 }}>
+                  <div className="font-mono" style={{ fontSize: 11.5, color: "var(--ink)", marginBottom: 7 }}>{s.signal}</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                    <div><div style={{ fontSize: 9.5, color: "var(--ink-faint)" }}>precision</div>{bar(s.precision)}</div>
+                    <div><div style={{ fontSize: 9.5, color: "var(--ink-faint)" }}>recall</div>{bar(s.recall)}</div>
+                    <div><div style={{ fontSize: 9.5, color: "var(--ink-faint)" }}>f1</div>{bar(s.f1)}</div>
                   </div>
                 </div>
               ))}
@@ -97,8 +96,8 @@ export function EvalDashboard({ provider }) {
       )}
 
       {!result && !loading && (
-        <div style={{ textAlign: "center", marginTop: 60, color: "var(--muted)", fontSize: 13 }}>
-          Click <strong style={{ color: "var(--jade)" }}>Run Eval</strong> to test the Bayesian fraud engine against 40 synthetic Nigerian transactions.
+        <div style={{ marginTop: 50, color: "var(--ink-faint)", fontSize: 13, lineHeight: 1.6, maxWidth: 420 }}>
+          Run the evaluation to score the Bayesian fraud engine against 40 labelled Nigerian transactions, 20 confirmed fraud, 20 confirmed legitimate.
         </div>
       )}
     </div>
