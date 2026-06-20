@@ -41,6 +41,18 @@ export const runEval = (provider) =>
     body: JSON.stringify({ use_synthetic: true, provider }),
   }).then(r => r.json());
 
+export async function uploadEvalCsv(file, provider) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const url = `${API}/eval/upload${provider ? `?provider=${encodeURIComponent(provider)}` : ""}`;
+  const res = await fetch(url, { method: "POST", body: fd });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Upload failed");
+  return data;
+}
+
+export const evalCsvTemplateUrl = `${API}/eval/upload/template`;
+
 // ── Workflows ─────────────────────────────────────────────────────────────────
 export const runWorkflow = (scenario_id, provider) =>
   fetch(`${API}/workflows/run`, {

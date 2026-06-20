@@ -1,18 +1,41 @@
-import { useState } from "react";
-import { runEval } from "../utils/api";
-import { GaugeCircle, Check, X, Loader } from "lucide-react";
+import { useState, useRef } from "react";
+import { runEval, uploadEvalCsv, evalCsvTemplateUrl } from "../utils/api";
+import { GaugeCircle, Check, X, Loader, Upload, Download, FileWarning } from "lucide-react";
 
 export function EvalDashboard({ provider }) {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [source, setSource] = useState(null);   // "synthetic" | "upload"
+  const [uploadError, setUploadError] = useState(null);
+  const fileRef = useRef(null);
 
-  const run = async () => {
+  const runSynthetic = async () => {
     setLoading(true);
+    setUploadError(null);
     try {
       const r = await runEval(provider);
       setResult(r);
+      setSource("synthetic");
     } catch { setResult(null); }
     finally { setLoading(false); }
+  };
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLoading(true);
+    setUploadError(null);
+    try {
+      const r = await uploadEvalCsv(file, provider);
+      setResult(r);
+      setSource("upload");
+    } catch (err) {
+      setUploadError(err.message || "Upload failed.");
+      setResult(null);
+    } finally {
+      setLoading(false);
+      e.target.value = "";
+    }
   };
 
   const tone = (v) => v > 0.8 ? "var(--stamp-green)" : v > 0.6 ? "var(--stamp-amber)" : "var(--stamp-rust)";
@@ -28,19 +51,49 @@ export function EvalDashboard({ provider }) {
 
   return (
     <div style={{ padding: 22, overflowY: "auto", height: "100%", maxWidth: 880 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 22 }}>
-        <div>
-          <div className="font-display" style={{ fontSize: 19, color: "var(--ink)" }}>Signal evaluation</div>
-          <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 3 }}>40-sample synthetic Nigerian fraud dataset, scored against the Bayesian engine</div>
+      <div style={{ marginBottom: 18 }}>
+        <div className="font-display" style={{ fontSize: 19, color: "var(--ink)" }}>Signal evaluation</div>
+        <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 3 }}>
+          Score the Bayesian fraud engine against a labelled dataset, the built-in 40-sample synthetic set, or your own real transaction history.
         </div>
-        <button onClick={run} disabled={loading} className="btn-primary"
-          style={{ padding: "8px 16px", borderRadius: 4, fontSize: 12.5, display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
-          {loading ? <><Loader size={13} className="animate-spin" /> Running</> : <><GaugeCircle size={13} /> Run evaluation</>}
-        </button>
       </div>
+
+      {/* Source controls */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
+        <button onClick={runSynthetic} disabled={loading} className="btn-primary"
+          style={{ padding: "8px 16px", borderRadius: 4, fontSize: 12.5, display: "flex", alignItems: "center", gap: 7 }}>
+          {loading ? <><Loader size={13} className="animate-spin" /> Running</> : <><GaugeCircle size={13} /> Run synthetic set</>}
+        </button>
+
+        <button onClick={() => fileRef.current?.click()} disabled={loading} className="btn-ghost"
+          style={{ padding: "8px 16px", borderRadius: 4, fontSize: 12.5, display: "flex", alignItems: "center", gap: 7 }}>
+          <Upload size={13} /> Upload your own CSV
+        </button>
+        <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{ display: "none" }} />
+
+        <a href={evalCsvTemplateUrl} download className="font-mono"
+          style={{ fontSize: 11, color: "var(--ink-faint)", display: "flex", alignItems: "center", gap: 5, textDecoration: "none" }}>
+          <Download size={12} /> download template
+        </a>
+      </div>
+
+      {uploadError && (
+        <div className="case-tab" style={{ borderRadius: 4, padding: "10px 13px", marginBottom: 16, borderLeftColor: "var(--stamp-rust)", display: "flex", gap: 9, alignItems: "flex-start" }}>
+          <FileWarning size={14} color="var(--stamp-rust)" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ fontSize: 12.5, color: "var(--ink)" }}>{uploadError}</div>
+        </div>
+      )}
 
       {result && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {source === "upload" && result.upload_summary && (
+            <div className="font-mono" style={{ fontSize: 11, color: "var(--ink-faint)" }}>
+              {result.upload_summary.filename}, {result.upload_summary.rows_parsed} rows scored
+              {result.upload_summary.rows_skipped > 0 && `, ${result.upload_summary.rows_skipped} skipped`}
+            </div>
+          )}
+
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
             {[
               { label: "Accuracy",  val: result.accuracy },
@@ -96,8 +149,8 @@ export function EvalDashboard({ provider }) {
       )}
 
       {!result && !loading && (
-        <div style={{ marginTop: 50, color: "var(--ink-faint)", fontSize: 13, lineHeight: 1.6, maxWidth: 420 }}>
-          Run the evaluation to score the Bayesian fraud engine against 40 labelled Nigerian transactions, 20 confirmed fraud, 20 confirmed legitimate.
+        <div style={{ marginTop: 30, color: "var(--ink-faint)", fontSize: 13, lineHeight: 1.6, maxWidth: 460 }}>
+          Run the built-in synthetic set, 20 confirmed fraud and 20 confirmed legitimate Nigerian transactions, or upload a CSV of your own labelled history to see how the same engine performs on real data.
         </div>
       )}
     </div>

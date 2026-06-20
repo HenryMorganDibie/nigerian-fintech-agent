@@ -207,6 +207,10 @@ class EvalRunResponse(BaseModel):
     provider_used: str
 
 
+class UploadEvalResponse(EvalRunResponse):
+    upload_summary: dict[str, Any] = {}
+
+
 # ── Workflow ──────────────────────────────────────────────────────────────────
 
 class WorkflowScenario(BaseModel):
