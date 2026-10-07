@@ -48,9 +48,9 @@ def build_synthetic_dataset() -> list[EvalSample]:
             timestamp=datetime(2025, 5, 1, 3, 12, tzinfo=timezone.utc),
             sim_replaced_hours_ago=18, is_new_recipient=True,
         )),
-        # Structuring — just under ₦1M
+        # Structuring — just under the ₦5M CTR threshold
         EvalSample(transaction_id="F002", label="fraud", transaction=tx(
-            amount=998500, channel="transfer",
+            amount=4_985_000, channel="transfer",
         )),
         # NIN-BVN mismatch
         EvalSample(transaction_id="F003", label="fraud", transaction=tx(
@@ -111,8 +111,8 @@ def build_synthetic_dataset() -> list[EvalSample]:
         )),
         # Round trip + structuring
         EvalSample(transaction_id="F015", label="fraud", transaction=tx(
-            amount=997000, recent_outbound_ngn=997000,
-            recent_inbound_from_same_ngn=990000,
+            amount=4_970_000, recent_outbound_ngn=4_970_000,
+            recent_inbound_from_same_ngn=4_950_000,
         )),
         # Device change + new recipient after hours
         EvalSample(transaction_id="F016", label="fraud", transaction=tx(

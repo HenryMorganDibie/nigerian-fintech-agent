@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 import uuid
 import json
 
+from app.core.regulatory import ctr_threshold
+
 
 # ── Compliance Constants ──────────────────────────────────────────────────────
 
@@ -74,6 +76,7 @@ def get_required_filings(
     amount_ngn: float,
     signal_names: list[str],
     is_data_breach: bool = False,
+    customer_type: str = "individual",
 ) -> list[RegulatoryFiling]:
     """
     Returns the list of regulatory filings required based on transaction risk assessment.
@@ -93,8 +96,8 @@ def get_required_filings(
             triggered_by=", ".join(signal_names) or risk_level,
         ))
 
-    # CTR — Currency Transaction Report (>₦5M)
-    if amount_ngn >= 5_000_000:
+    # CTR — Currency Transaction Report (₦5M individual / ₦10M corporate)
+    if amount_ngn >= ctr_threshold(customer_type):
         filings.append(RegulatoryFiling(
             filing_type="CTR",
             deadline_description="File Currency Transaction Report with NFIU within 7 days",
@@ -134,6 +137,7 @@ def get_required_filings(
 PII_FIELDS = {
     "bvn", "nin", "phone_number", "email", "full_name",
     "date_of_birth", "address", "account_number",
+    "sender_account", "recipient_account",
 }
 
 def scrub_pii_for_llm(data: dict) -> dict:

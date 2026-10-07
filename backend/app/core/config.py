@@ -33,6 +33,21 @@ class Settings(BaseSettings):
     # ── Feature store (in-memory by default, Redis if URL provided) ────────
     redis_url: str = ""
 
+    # ── Persistence ────────────────────────────────────────────────────────
+    # SQLite for local dev; set a postgresql+psycopg:// URL in production.
+    database_url: str = "sqlite:///./naijafinai.db"
+
+    # ── Platform / multi-tenancy ───────────────────────────────────────────
+    # Bootstrap token for /v1/admin. Leave empty to disable the admin API.
+    admin_token: str = ""
+    # Keeps the open /api/* sandbox (used by the public demo UI) mounted.
+    # Set DEMO_MODE=false for a customer deployment so only /v1 is exposed.
+    demo_mode: bool = True
+    # Default mode for newly created tenants: score but never enforce.
+    default_tenant_mode: Literal["shadow", "live"] = "shadow"
+    # Bump whenever scoring logic or signal parameters change.
+    model_version: str = "rules-2026.10.0"
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors(cls, v):
@@ -42,7 +57,7 @@ class Settings(BaseSettings):
             return [o.rstrip("/") for o in v]
         return v
 
-    model_config = {"env_file": str(ENV_FILE), "extra": "ignore"}
+    model_config = {"env_file": str(ENV_FILE), "extra": "ignore", "protected_namespaces": ("settings_",)}
 
 
 settings = Settings()
@@ -84,4 +99,10 @@ def validate_startup():
         print(f"     → Set {settings.default_llm_provider.upper()}_API_KEY in Railway environment variables\n")
     else:
         print(f"\n  ✅ Ready — {settings.default_llm_provider.upper()} / {settings.groq_model}\n")
+    db_kind = settings.database_url.split(":", 1)[0]
+    print(f"  Database         : {db_kind}")
+    print(f"  Demo sandbox     : {'mounted at /api' if settings.demo_mode else 'disabled'}")
+    print(f"  Admin API        : {'enabled' if settings.admin_token else 'disabled (ADMIN_TOKEN not set)'}")
+    if settings.app_env == "production" and settings.secret_key == "dev-secret-key":
+        print("  ❌ SECRET_KEY is the development default. Set a random SECRET_KEY before taking traffic.")
     print("─────────────────────────────────────────────────\n")

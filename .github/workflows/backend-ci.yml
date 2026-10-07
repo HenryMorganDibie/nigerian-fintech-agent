@@ -1,0 +1,51 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", ".github/workflows/backend-ci.yml"]
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend-ci.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: naija
+          POSTGRES_PASSWORD: naija
+          POSTGRES_DB: naija_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U naija -d naija_test"
+          --health-interval 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Unit + API tests (SQLite, in-memory feature store)
+        run: python -m pytest -q
+      - name: Integration tests (Postgres + Redis, includes concurrency)
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://naija:naija@localhost:5432/naija_test
+          TEST_REDIS_URL: redis://localhost:6379/0
+        run: python -m pytest -q

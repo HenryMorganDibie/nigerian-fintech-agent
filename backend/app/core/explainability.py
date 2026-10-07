@@ -76,7 +76,7 @@ class ExplainabilityReport:
 
 SIGNAL_LABELS = {
     "SIM_SWAP_HIGH_VALUE_USSD":        "SIM replacement + high-value USSD transfer",
-    "CBN_STRUCTURING":                 "Amount near ₦1M CBN reporting threshold",
+    "CBN_STRUCTURING":                 "Amount just below the ₦5M CTR threshold",
     "NIN_BVN_MISMATCH":               "NIN and BVN do not match NIMC records",
     "USSD_AFTER_HOURS":               "USSD transfer in high-risk hours (01:00–05:00 WAT)",
     "DEVICE_CHANGE_BEFORE_TRANSFER":  "New device fingerprint before large transfer",
@@ -131,7 +131,7 @@ def build_explainability_report(
         if name == "DEVICE_CHANGE_BEFORE_TRANSFER" and amount > 0 and user_avg_amount > 0:
             context = f"New device + ₦{amount:,.0f} transfer ({amount/user_avg_amount:.1f}× user average)"
         elif name == "CBN_STRUCTURING":
-            context = f"₦{amount:,.0f} falls in ₦900k–₦999k structuring zone"
+            context = f"₦{amount:,.0f} falls just below the ₦5M CTR threshold"
         elif name in ("SIM_SWAP_HIGH_VALUE_USSD",):
             context = "SIM replaced within 48 hours — account takeover window"
 

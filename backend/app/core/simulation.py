@@ -95,16 +95,16 @@ SIMULATION_SCENARIOS = {
 
     "structuring_attack": {
         "name": "Structuring / Smurfing",
-        "description": "Criminal splits large sum into sub-₦1M transfers to avoid CBN Currency Transaction Report",
+        "description": "Criminal splits a large sum into sub-₦5M transfers to avoid the NFIU Currency Transaction Report",
         "expected_risk": "critical",
         "attack_story": [
-            "9:00 — Transfer of ₦998,500 (just below ₦1M CTR threshold)",
-            "9:15 — Transfer of ₦997,000 to different account",
-            "9:30 — Transfer of ₦995,000 to third account",
+            "9:00 — Transfer of ₦4,985,000 (just below the ₦5M CTR threshold)",
+            "9:15 — Transfer of ₦4,970,000 to a different account",
+            "9:30 — Transfer of ₦4,950,000 to a third account",
             "System triggers CBN_STRUCTURING + SPLIT_TRANSACTION_PATTERN",
         ],
         "transaction": _tx(
-            amount=998500,
+            amount=4_985_000,
             channel="transfer",
             is_new_recipient=True,
             transactions_last_hour=3,

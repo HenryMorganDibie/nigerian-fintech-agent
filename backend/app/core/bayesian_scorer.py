@@ -50,8 +50,8 @@ BAYESIAN_SIGNALS: list[BayesianSignal] = [
         prior_prob=0.72,
         likelihood_ratio=18.5,
         weight=1.4,
-        description="Amount in ₦900k–₦999k structuring zone to avoid CTR reporting.",
-        cbn_reference="CBN AML/CFT Regulations 2022, Section 4.3",
+        description="Amount in the ₦4.5M–₦4,999,999 zone, just below the ₦5M CTR threshold.",
+        cbn_reference="MLPPA 2022 (CTR threshold); CBN AML/CFT Regulations",
         recommended_action="File STR with NFIU within 24 hours.",
     ),
     BayesianSignal(

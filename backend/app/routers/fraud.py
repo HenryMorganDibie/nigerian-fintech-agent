@@ -1,9 +1,8 @@
 from fastapi import APIRouter
-from app.core.scoring_engine import compute_signal_score
-from app.core.decision_engine import apply_decision, apply_decision_engine, drift_monitor, feedback_store
-from app.core.feature_store import compute_behavioral_deviation
-from app.core.fraud_graph import analyze_graph_risk, record_transaction_edge
-from app.core.compliance import get_required_filings, AuditLogEntry, scrub_pii_for_llm
+from app.core.decision_engine import drift_monitor, feedback_store
+from app.core.pipeline import run_pipeline
+from app.core.security import customer_ref
+from app.core.compliance import AuditLogEntry, scrub_pii_for_llm
 from app.core.llm_factory import get_llm_with_fallback
 from app.core.prompts import FRAUD_SYSTEM_PROMPT
 from app.core.config import settings
@@ -22,68 +21,22 @@ async def analyze_fraud(req: FraudAnalysisRequest):
     provider = req.provider or settings.default_llm_provider
     tx = req.transaction
 
-    # ── Scoring engine ────────────────────────────────────────────────────
-    sig = compute_signal_score(
-        amount=tx.amount, channel=tx.channel,
-        hour_of_day=tx.timestamp.hour, day_of_week=tx.timestamp.weekday(),
-        is_new_recipient=tx.is_new_recipient, is_new_device=tx.is_new_device,
-        device_changed_hours_ago=tx.device_changed_hours_ago,
-        sim_replaced_hours_ago=tx.sim_replaced_hours_ago,
-        transactions_last_hour=tx.transactions_last_hour,
-        micro_tx_last_10min=getattr(tx, "micro_tx_last_10min", 0),
-        bvn_verified=tx.bvn_verified, nin_bvn_match=tx.nin_bvn_match,
-        narration=tx.narration,
-        is_post_loan_disbursement=tx.is_post_loan_disbursement,
-        is_agent_terminal=tx.is_agent_terminal,
-        agent_tx_count_last_hour=tx.agent_tx_count_last_hour,
-        is_pos=tx.is_pos,
-        is_pos_reversal=getattr(tx, "is_pos_reversal", False),
-        recent_outbound_ngn=tx.recent_outbound_ngn,
-        recent_inbound_from_same_ngn=tx.recent_inbound_from_same_ngn,
-        account_age_days=getattr(tx, "account_age_days", 365),
-        new_beneficiaries_last_hour=getattr(tx, "new_beneficiaries_last_hour", 0),
-    )
-
-    # ── Behavioral deviation ──────────────────────────────────────────────
-    behavioral = compute_behavioral_deviation(
-        user_id=tx.sender_account, amount=tx.amount, channel=tx.channel,
-        device_fingerprint=str(tx.device_changed_hours_ago) if tx.device_changed_hours_ago else None,
-        beneficiary_account=tx.recipient_account,
-        hour_of_day=tx.timestamp.hour,
-    )
-
-    # ── Graph risk ────────────────────────────────────────────────────────
-    graph = analyze_graph_risk(
-        sender_account=tx.sender_account, recipient_account=tx.recipient_account,
-        device_fingerprint=str(tx.device_changed_hours_ago) if tx.device_changed_hours_ago else None,
-        amount=tx.amount,
-    )
-    record_transaction_edge(tx.sender_account, tx.recipient_account, tx.amount)
-
-    # ── Decision engine ───────────────────────────────────────────────────
-    decision = apply_decision(
-        signal_score=sig.score,
-        signal_names=[s.name for s in sig.triggered],
-        behavioral_score=behavioral["behavioral_deviation_score"],
-        graph_score=graph["graph_risk_score"],
-        amount=tx.amount,
-        graph_patterns=graph["patterns_detected"],
-    )
+    # ── Deterministic pipeline (shared with /v1/decisions) ────────────────
+    result = run_pipeline(tx, tenant_id="demo")
+    sig, behavioral, graph, decision, filings = (
+        result.signals, result.behavioral, result.graph, result.decision, result.filings)
 
     drift_monitor.record(decision.composite_score, [s.name for s in sig.triggered], decision.risk_level, tx.amount)
 
-    filings = get_required_filings(
-        risk_level=decision.risk_level, amount_ngn=tx.amount,
-        signal_names=[s.name for s in sig.triggered] + [p.get("type","") for p in graph["patterns_detected"]],
-    )
-
     # ── LLM narrative — receives evidence, not just signal names ──────────
+    # The LLM sees a pseudonym, never the raw account number (NDPA data minimisation).
+    customer_alias = "CUST-" + customer_ref("demo", tx.sender_account)[:10].upper()
     safe_ctx = scrub_pii_for_llm({
-        "customer_id": tx.sender_account,          # so LLM knows which customer it's analysing
+        "customer_id": customer_alias,
         "transaction_id": tx.transaction_id,
         "amount_ngn": tx.amount,
         "channel": tx.channel,
-        "hour_of_day": tx.timestamp.hour,
+        "hour_of_day": result.local_time.hour,
         "narration": tx.narration,
         "composite_score": decision.composite_score,
         "posterior_fraud_probability_pct": round(sig.posterior_fraud_probability * 100, 1),
@@ -105,7 +58,7 @@ async def analyze_fraud(req: FraudAnalysisRequest):
     llm_resp = llm.invoke([
         SystemMessage(content=FRAUD_SYSTEM_PROMPT),
         HumanMessage(content=(
-            f"Fraud analysis for customer {tx.sender_account}, transaction {tx.transaction_id}:\n\n"
+            f"Fraud analysis for customer {customer_alias}, transaction {tx.transaction_id}:\n\n"
             f"{json.dumps(safe_ctx, indent=2)}\n\n"
             "Write the compliance officer report using ONLY the evidence provided above. "
             "Do not add signals or evidence that are not listed. "

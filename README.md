@@ -1,4 +1,4 @@
-# 🇳🇬 NaijaFinAI — Production AI Fraud Intelligence Agent for Nigerian Fintechs
+# 🇳🇬 NaijaFinAI — Real-Time Fraud Decisioning for Nigerian Fintechs
 
 > **Built from the ground up for Nigeria. Not a global tool with a Nigerian skin.**
 
@@ -20,6 +20,7 @@
 6. [Tech Stack](#6-tech-stack)
 7. [Live Demo](#7-live-demo)
 8. [System Architecture — 7 Layers](#8-system-architecture--7-layers)
+    - [Platform API (/v1) — integrate in an afternoon](#platform-api-v1--integrate-in-an-afternoon)
 9. [Fraud Scoring Deep Dive](#9-fraud-scoring-deep-dive)
 10. [Nigerian Fraud Signal Library](#10-nigerian-fraud-signal-library)
 11. [Language Intelligence](#11-language-intelligence)
@@ -38,7 +39,7 @@
 
 ## 1. What Is This?
 
-NaijaFinAI is a **production-grade AI agent** built specifically for Nigerian fintech companies. It combines:
+NaijaFinAI is a fraud decisioning engine and analyst assistant built specifically for Nigerian fintech companies. It combines:
 
 - **Fraud detection** — real-time transaction risk scoring using patterns specific to Nigeria's payments ecosystem
 - **Customer support** — AI agent that understands Pidgin English, Yoruba, Hausa, and Igbo alongside standard English
@@ -47,6 +48,17 @@ NaijaFinAI is a **production-grade AI agent** built specifically for Nigerian fi
 - **Compliance automation** — NDPA 2023-compliant audit logging, NFIU STR/CTR filing triggers, EFCC escalation paths
 
 It is **not** a generic AI chatbot with Nigerian currency symbols swapped in. Every component — the fraud signals, regulatory citations, language routing, compliance deadlines — is built for Nigeria specifically.
+
+### Status — what is real today
+
+| | |
+|---|---|
+| **Production surface** | `/v1` API: per-tenant API keys, idempotent decisions, shadow mode, label capture, hash-chained audit log, Postgres + Redis state. Covered by an automated test suite that runs in CI against real Postgres and Redis. |
+| **Decision path** | Deterministic, no LLM, no network calls. Measured p99 **22.6 ms** in-process on Postgres + Redis (server-side p99 **9.5 ms**), excluding network. Reproduce with `backend/scripts/bench_decisions.py`. |
+| **Model** | Expert-set rules and likelihood ratios. **Not yet fitted to real labelled fraud data**, so scores are rankings, not calibrated probabilities. Fitting per-client models on labels collected through `/v1` is the next phase. |
+| **Evaluation** | The bundled 40-sample synthetic set is a regression check, not a performance claim. Real performance is measured per client in shadow mode on their own traffic and labels (`GET /v1/metrics/summary`). |
+| **Regulatory values** | Thresholds live in [`backend/app/core/regulatory.py`](backend/app/core/regulatory.py). Every threshold and citation must be confirmed by the deploying institution's compliance team against MLPPA 2022, current CBN AML/CFT regulations and NFIU guidance before go-live. |
+| **Demo sandbox** | The open `/api/*` routes power the public demo UI. They are unauthenticated by design and are switched off with `DEMO_MODE=false` in customer deployments. |
 
 ---
 
@@ -70,17 +82,16 @@ NaijaFinAI fills this gap with infrastructure built natively for this ecosystem.
 
 | Metric | Value |
 |---|---|
-| Nigerian fraud signals | **13** — each with a CBN/EFCC/NFIU regulatory citation |
-| Bayesian likelihood ratios | **3.8× to 45×** across all signals |
-| Synthetic eval dataset | **40 labelled samples** (20 fraud, 20 legit) |
-| Eval harness F1 score | **~88%** on synthetic Nigerian fraud dataset |
+| Nigerian fraud signals | **18** in the decision engine, each with a regulatory reference and evidence string |
+| Likelihood ratios | **3.8× to 45×**, expert-set (to be re-estimated from client labels) |
+| Synthetic regression set | **40 hand-written samples** (20 fraud, 20 legit): precision 1.00, recall 0.55, F1 0.71. A sanity check, not a performance claim |
+| Automated tests | **50** (unit, API, tenant isolation, idempotency, audit tamper detection, concurrency on Postgres) |
 | Languages supported | **5** — English, Pidgin, Yoruba, Hausa, Igbo |
 | API endpoints | **20+** across fraud, loans, chat, eval, A/B, cases, simulation |
 | LLM providers supported | **4** — Groq (default/free), OpenAI, Anthropic, Google |
 | Groq daily free tokens | **100k** primary + **500k** fallback |
-| Decision latency (rules only) | **<50ms** |
-| Decision latency (full 4-layer + LLM) | **~2–4s** |
-| False positive rate (synthetic eval) | **<1%** |
+| `/v1/decisions` latency | **p50 15.8 ms · p99 22.6 ms** in-process on Postgres + Redis (n = 1,000); LLM never on this path |
+| Analyst narrative (LLM, on demand) | **~2–4 s**, generated separately via `/v1/decisions/{id}/explanation` |
 | Regulatory frameworks encoded | CBN, NFIU, EFCC, NDPA 2023, NDPC |
 
 ---
@@ -115,19 +126,23 @@ NaijaFinAI fills this gap with infrastructure built natively for this ecosystem.
 
 | Capability | Generic Tools | NaijaFinAI |
 |---|---|---|
-| Fraud signals | Generic velocity checks | 13 Nigerian-specific signals with CBN/EFCC/NFIU citations |
-| Scoring model | Additive rules | Bayesian log-odds — calibrated posterior fraud probabilities |
+| Fraud signals | Generic velocity checks | 18 Nigerian-specific signals, each returning the evidence that fired it |
+| Scoring model | Additive rules | Bayesian log-odds aggregation (expert priors today; per-client fitting next) |
+| Integration | Weeks of professional services | One authenticated REST call, idempotent by transaction id |
+| Risk-free trial | Go live and hope | Shadow mode: score real traffic, enforce nothing, measure against your own labels |
+| Multi-tenancy | N/A | Per-tenant keys, baselines, graph and audit chain; no cross-customer leakage |
 | Behavioral memory | None | Per-user feature store: velocity, device history, beneficiary graph |
 | Graph fraud | None | Shared device detection, circular flows, mule cluster patterns |
 | Hard overrides | None | 5 rules forcing CRITICAL regardless of composite score |
 | Nigerian languages | English only | Pidgin + Yoruba + Hausa + Igbo + Nigerian English |
 | Voice input | None | Groq Whisper (free) — all Nigerian languages |
 | Regulatory output | "Flag for review" | Exact NFIU/EFCC form URLs, CBN circular citations, deadlines |
-| NDPA compliance | None | §40 audit log, PII scrubbing before LLM calls, 5-year retention |
+| Audit trail | Mutable logs | Hash-chained per tenant; any edit, deletion or reordering is detectable via `/v1/audit/verify` |
+| NDPA data minimisation | None | Account ids pseudonymised (keyed HMAC) in storage and audit; PII scrubbed before any LLM call |
 | LLM reliability | Single provider | Dual Groq models with auto-fallback + circuit breaker |
-| Feedback loop | None | Analyst outcomes → signal weight updates + drift monitoring |
+| Feedback loop | None | Confirmed outcomes recorded per decision (`/v1/decisions/{id}/labels`) → live precision/recall per tenant |
 | Drift detection | None | PSI-based distribution drift, fraud rate spike alerts |
-| Evaluation harness | None | 40-sample synthetic dataset, live precision/recall/F1 per signal |
+| Evaluation harness | None | Upload labelled CSV history or label live decisions; synthetic set kept as a regression check |
 | A/B testing | None | 3-variant traffic routing with performance comparison |
 | Case management | None | Full investigation workflow: assign, escalate, STR draft |
 | Load testing | None | Locust scripts covering all major endpoints |
@@ -263,6 +278,69 @@ Transaction Event
 └─────────────────────────────────────────────────────────────┘
 ```
 
+
+### Platform API (/v1) — integrate in an afternoon
+
+Every `/v1` route requires an API key (`Authorization: Bearer nfa_live_…` or `X-API-Key`) and only ever sees the calling tenant's data.
+
+```
+POST /v1/decisions                     Score a transaction. Idempotent. No LLM. Returns allow | review | hold | block
+GET  /v1/decisions?action=block        Recent decisions, filterable
+GET  /v1/decisions/{id}                One decision, with label and explanation if present
+POST /v1/decisions/{id}/labels         Confirmed outcome: fraud | legit (+ source: analyst, chargeback, …)
+POST /v1/decisions/{id}/explanation    Analyst narrative from the stored evidence (LLM, cached, off the hot path)
+GET  /v1/metrics/summary               Volumes, action mix, latency percentiles, precision/recall on labelled decisions
+GET  /v1/audit/verify                  Verify the tenant's audit hash chain
+GET  /v1/tenant                        Current tenant and mode
+
+# Operator only (requires ADMIN_TOKEN, header X-Admin-Token)
+POST   /v1/admin/tenants               Onboard a fintech → returns its first API key (shown once)
+PATCH  /v1/admin/tenants/{id}          Switch shadow ↔ live, enable/disable
+POST   /v1/admin/tenants/{id}/keys     Issue another key (rotation)
+DELETE /v1/admin/tenants/{id}/keys/{k} Revoke a key
+```
+
+**Request**
+
+```bash
+curl -X POST $API/v1/decisions \
+  -H "Authorization: Bearer $NAIJAFINAI_KEY" \
+  -H "Idempotency-Key: nip-000123" \
+  -H "Content-Type: application/json" \
+  -d '{"transaction": {
+        "transaction_id": "nip-000123", "amount": 85000, "channel": "ussd",
+        "timestamp": "2026-10-07T02:14:00+01:00",
+        "sender_account": "0123456789", "recipient_account": "9876543210",
+        "sim_replaced_hours_ago": 6, "device_id": "a1f9…"
+      }}'
+```
+
+**Response (abridged)**
+
+```json
+{
+  "id": "dec_4c1e…", "mode": "live",
+  "action": "block", "recommended_action": "block",
+  "risk_level": "critical", "score": 82, "hard_override": "SIM_SWAP_USSD",
+  "reason_codes": [
+    {"code": "SIM_SWAP_HIGH_VALUE_USSD", "severity": "critical",
+     "evidence": "SIM was replaced 6 hours ago. USSD transfer of ₦85,000 attempted within the 48-hour high-risk window.",
+     "reference": "CBN CPD/DIR/GEN/LAB/13/006"}
+  ],
+  "regulatory_filings": [{"filing_type": "STR", "regulatory_body": "Nigerian Financial Intelligence Unit (NFIU)", "urgency_hours": 24}],
+  "model_version": "rules-2026.10.0", "latency_ms": 6.1,
+  "audit": {"seq": 418, "hash": "9f2c…"}
+}
+```
+
+**Semantics that matter in payments**
+
+- **Idempotency.** `Idempotency-Key` header, defaulting to `transaction_id`. A retry with the same body returns the original decision (`Idempotent-Replayed: true`) and is never re-scored, so behavioural baselines are not double-counted. The same key with a different body returns `409 idempotency_conflict`. Concurrent retries are serialised with Postgres advisory locks.
+- **Shadow mode.** New tenants start in shadow: `recommended_action` is what the engine would do, `action` is always `allow`. Label outcomes as they become known, watch `/v1/metrics/summary`, and switch to live only when the numbers justify it. A live tenant can shadow individual requests with `"mode": "shadow"`; a shadow tenant cannot force enforcement.
+- **Time zone.** Time-of-day signals are evaluated in WAT (UTC+1). Send timezone-aware timestamps; naive ones are taken as WAT.
+- **CTR thresholds.** Send `"customer_type": "corporate"` for businesses to use the ₦10M threshold instead of ₦5M.
+- **Baselines.** Only transactions the engine would allow extend a customer's behavioural baseline, so fraud cannot teach the model that fraud is normal.
+
 ---
 
 ## 9. Fraud Scoring Deep Dive
@@ -284,7 +362,7 @@ posterior_fraud_probability = 1 / (1 + exp(-log_odds))
 risk_score = int(posterior_fraud_probability * 100)
 ```
 
-A transaction with no signals scores ~2 (the base fraud rate). A NIN-BVN mismatch (LR=45×) alone moves the probability dramatically. Multiple high-LR signals compound multiplicatively, producing a calibrated probability — not an arbitrary integer.
+A transaction with no signals scores ~2 (the base fraud rate). A NIN-BVN mismatch (LR=45×) alone moves the probability dramatically. Multiple high-LR signals compound multiplicatively, producing a probability-shaped score rather than an arbitrary integer. It becomes a calibrated probability only once the likelihood ratios are re-estimated from a client's labelled outcomes.
 
 ### Weighted composite
 
@@ -330,9 +408,9 @@ Five conditions bypass the composite score and force CRITICAL:
 | `NIN_BVN_MISMATCH` | **45×** | Critical | NIN and BVN don't match NIMC/NIBSS records — synthetic identity | CBN BPS/DIR/GEN/CIR/03/002 |
 | `SIM_SWAP_HIGH_VALUE_USSD` | **22×** | Critical | USSD transfer >₦10k within 48h of SIM replacement | CBN CPD/DIR/GEN/LAB/13/006 |
 | `ROUND_TRIP_TRANSFER` | **19.6×** | Critical | Funds returned to sender via different path — layering | CBN AML/CFT 2022 §3.1 |
-| `CBN_STRUCTURING` | **18.5×** | Critical | Amount in ₦900k–₦999k zone — CTR threshold evasion | CBN AML/CFT 2022 §4.3 |
+| `CBN_STRUCTURING` | **18.5×** | Critical | Amount in the 90–100% band just below the CTR threshold (₦4.5M–₦4,999,999 individual; ₦9M–₦9,999,999 corporate) | MLPPA 2022 (CTR threshold) |
 | `AGENT_VELOCITY_SPIKE` | **14.8×** | High | Agent terminal >20 txns/hour to unique recipients | CBN Agent Banking 2019 §6.3 |
-| `SPLIT_TRANSACTION_PATTERN` | **13.1×** | High | Multiple txns aggregating above STR threshold | CBN AML/CFT 2022 §4.3 |
+| `SPLIT_TRANSACTION_PATTERN` | **13.1×** | High | 3+ sub-threshold transfers in an hour that together cross the CTR threshold | MLPPA 2022 (CTR threshold) |
 | `FIRST_PARTY_FRAUD_LOAN` | **12.4×** | High | Loan disbursement + immediate full withdrawal to new recipient | CBN MFB Guidelines §8.4 |
 | `UNVERIFIED_BVN_LARGE_TRANSFER` | **11.2×** | High | Large transfer from account with unverified BVN | CBN BPS/DIR/2020/004 |
 | `DEVICE_CHANGE_BEFORE_TRANSFER` | **9.3×** | High | New device fingerprint <6h before high-value transfer | CBN e-Banking Guidelines 2020 §7 |
@@ -399,18 +477,30 @@ AuditLogEntry(
 )
 ```
 
+### Tamper-evident audit chain (/v1)
+
+Every tenant has an append-only chain in Postgres. Each event (`decision.created`, `decision.labelled`, `decision.explained`, `api_key.created`, `api_key.revoked`, `tenant.updated`) stores the SHA-256 of its predecessor:
+
+```
+hash_n = SHA-256(hash_{n-1} || canonical_json(tenant_id, seq, event_type, subject_id, payload, created_at))
+```
+
+`GET /v1/audit/verify` recomputes the chain and reports the first broken sequence number if any row was altered, deleted or reordered. Payloads carry a keyed pseudonym (`customer_ref`), never raw account numbers.
+
 ### PII scrubbing before LLM calls
 
-Fields stripped before sending to Groq:
-`bvn`, `nin`, `phone_number`, `email`, `full_name`, `date_of_birth`, `address`, `account_number`
+Fields stripped before sending to any LLM:
+`bvn`, `nin`, `phone_number`, `email`, `full_name`, `date_of_birth`, `address`, `account_number`, `sender_account`, `recipient_account`. Customers are referred to by pseudonym only.
 
 ### Regulatory Filing Tracker
 
 | Trigger | Filing | Deadline | Body |
 |---|---|---|---|
 | High or critical risk | STR | 24 hours | NFIU via goaml.nfiu.gov.ng |
-| Amount > ₦5 million | CTR | 7 days | NFIU via goaml.nfiu.gov.ng |
-| Critical + amount > ₦5M | EFCC Referral | 48 hours | EFCC Cybercrime Unit |
+| Amount ≥ ₦5M (individual) / ≥ ₦10M (corporate) | CTR | 7 days* | NFIU via goaml.nfiu.gov.ng |
+| Critical + amount ≥ ₦5M | EFCC Referral | 48 hours | EFCC Cybercrime Unit |
+
+\* Filing deadlines and thresholds are configuration in `backend/app/core/regulatory.py` and `compliance.py`; confirm them with your compliance function before go-live.
 | Personal data breach | NDPC Breach | 72 hours | NDPC via ndpc.gov.ng |
 
 ---
@@ -442,10 +532,18 @@ POST /api/fraud/analyze
 nigerian-fintech-agent/
 ├── backend/
 │   ├── Dockerfile
-│   ├── main.py                        App entry, all routers registered
-│   ├── requirements.txt
+│   ├── main.py                        App entry: /v1 always, /api sandbox when DEMO_MODE=true
+│   ├── requirements.txt               + requirements-dev.txt (pytest)
+│   ├── scripts/bench_decisions.py     Latency benchmark for /v1/decisions
+│   ├── tests/                         pytest suite (SQLite by default; Postgres/Redis via TEST_* env)
 │   └── app/
+│       ├── db.py                      SQLAlchemy models: tenants, api_keys, decisions, audit_events
 │       ├── core/
+│       │   ├── pipeline.py            Deterministic scoring path shared by /v1 and /api
+│       │   ├── security.py            API-key auth, tenant resolution, keyed customer pseudonyms
+│       │   ├── audit.py               Per-tenant hash-chained audit log + verifier
+│       │   ├── regulatory.py          CTR thresholds and structuring band (compliance-owned config)
+│       │   ├── scoring_engine.py      18 evidence-grounded signals used by the decision path
 │       │   ├── event_stream.py        Layer 1: Async event queue (Kafka-ready)
 │       │   ├── feature_store.py       Layer 2: Per-user behavioral memory (Redis-ready)
 │       │   ├── nigeria_intelligence.py Layer 3a: 13 Nigerian heuristic signals
@@ -467,6 +565,8 @@ nigerian-fintech-agent/
 │       ├── tools/fintech_tools.py     3 LangChain tools: fraud, loan, insights
 │       ├── models/schemas.py          All Pydantic v2 schemas
 │       └── routers/
+│           ├── v1.py                  /v1 decisions, labels, explanations, metrics, audit
+│           ├── admin.py               /v1/admin tenant onboarding and key management
 │           ├── chat.py                POST /api/chat
 │           ├── fraud.py               POST /api/fraud/analyze, feedback, drift, events
 │           ├── loans.py               POST /api/loans/eligibility
@@ -662,8 +762,31 @@ CORS_ORIGINS=http://localhost:5173,http://localhost:3000
 
 ```bash
 cd backend
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+pip install -r requirements-dev.txt
+python -m pytest -q                      # 48 pass, 2 Postgres-only tests skip on SQLite
+ADMIN_TOKEN=change-me uvicorn main:app --reload --port 8000
+```
+
+Or the full stack with Postgres and Redis: `docker compose up --build`.
+
+Onboard a tenant and score a first transaction:
+
+```bash
+curl -s -X POST localhost:8000/v1/admin/tenants -H "X-Admin-Token: change-me" \
+  -H "Content-Type: application/json" -d '{"name": "Acme MFB"}'
+# → {"tenant": {"id": "ten_…", "mode": "shadow"}, "api_key": {"key": "nfa_live_…"}}
+
+curl -s -X POST localhost:8000/v1/decisions -H "Authorization: Bearer nfa_live_…" \
+  -H "Content-Type: application/json" \
+  -d '{"transaction": {"transaction_id": "t1", "amount": 15000, "timestamp": "2026-10-07T14:00:00+01:00",
+                       "sender_account": "0123456789", "recipient_account": "9876543210"}}'
+```
+
+Run the integration tests against real services:
+
+```bash
+TEST_DATABASE_URL=postgresql+psycopg://user:pass@localhost:5432/naija_test \
+TEST_REDIS_URL=redis://localhost:6379/0 python -m pytest -q
 ```
 
 Startup output confirms which providers are ready:
@@ -710,7 +833,13 @@ GROQ_MODEL=llama-3.3-70b-versatile
 GROQ_FALLBACK_MODEL=llama-3.1-8b-instant
 DEFAULT_LLM_PROVIDER=groq
 CORS_ORIGINS=https://henrymorgandibie.github.io,http://localhost:5173
+SECRET_KEY=<long random string>
+ADMIN_TOKEN=<long random string>
+DATABASE_URL=${{Postgres.DATABASE_URL}}   # add the Railway Postgres plugin
+REDIS_URL=${{Redis.REDIS_URL}}            # add the Railway Redis plugin
 ```
+
+Without `DATABASE_URL` the API falls back to a SQLite file inside the container, which is lost on every redeploy. `postgres://` URLs are accepted as-is.
 
 3. Railway auto-detects the `Dockerfile` and builds on every push to `main`.
 
@@ -757,11 +886,13 @@ Covers: fraud analysis (all risk levels), loan eligibility, chat, simulations, d
 | Current | Production Upgrade |
 |---|---|
 | `asyncio.Queue` event stream | `kafka-python` — change 10 lines in `event_stream.py` |
-| In-memory feature store | Redis — set `REDIS_URL` env var, already wired |
-| In-memory fraud graph | Neo4j AuraDB — persistent, queryable, visualizable |
-| In-memory case queue | PostgreSQL append-only table |
+| ~~In-memory feature store~~ | ✅ Redis via `REDIS_URL`, tenant-namespaced |
+| ~~Audit logs in API response~~ | ✅ Hash-chained per-tenant audit table in Postgres |
+| ~~No authentication~~ | ✅ Per-tenant API keys (hashed), admin onboarding, revocation |
+| In-memory fraud graph (tenant-partitioned) | Postgres or Neo4j, shared across API replicas |
+| In-memory case queue | PostgreSQL, wired to `/v1` decisions |
 | In-memory A/B results | PostgreSQL + Grafana |
-| Audit logs in API response | PostgreSQL WORM table |
+| `create_all` schema bootstrap | Alembic migrations |
 | Groq free tier | Groq paid, or self-hosted Ollama on GPU |
 | Single Railway instance | Railway Pro / GCP Cloud Run |
 | Manual signal calibration | MLflow + scheduled retraining on confirmed fraud labels |
@@ -783,16 +914,16 @@ Say: *"Let me send you the link so you can test it while I walk through it."*
 
 2. **Simulate → SIM Swap Attack** — One click, instant full 4-layer output with composite score, layer breakdown, CBN citations, regulatory filings.
 
-3. **Eval → Run Eval** — Live precision/recall/F1 per signal. Say: *"This is what separates a system from a demo — measurable performance."*
+3. **Eval → Upload CSV** — Upload labelled history and get precision/recall on real data. Say: *"The synthetic set is a smoke test. Your labels are the only benchmark that counts."*
 
 4. **Monitor → Drift Detection** — Explain PSI-based detection. Say: *"Fraud patterns change — this layer detects signal degradation before it fails in production."*
 
 ### Key phrases
 - *"Precision over recall — a 1% false positive rate destroys a payments product"*
-- *"The Bayesian scorer gives calibrated posterior probabilities, not additive integers"*
+- *"Start in shadow mode: we score your real traffic, block nothing, and show you the money we would have saved"*
 - *"Same ₦500k transfer — low risk for User A, high risk for User B. That's the feature store."*
 - *"The LLM explains the decision. The deterministic engine makes it. LLM never in the critical path."*
-- *"CBN AML/CFT 2022 Section 4.3 — structuring threshold is ₦999,999, not ₦1,000,000"*
+- *"Structuring sits just under the ₦5M CTR threshold (₦10M for corporates), and every threshold is configuration your compliance team signs off"*
 
 ---
 

@@ -1,19 +1,27 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from app import db
 from app.core.config import settings, get_available_providers, validate_startup
 from app.core.llm_factory import get_circuit_breaker_status
 from app.routers import (
     chat, fraud, loans, transactions,
     eval, workflows, media,
     ab_testing, simulation, cases,
+    v1, admin,
 )
 
 validate_startup()
+db.configure()
 
 app = FastAPI(
     title="NaijaFinAI Agent API",
-    description="Production AI agent for Nigerian fintechs.",
-    version="3.0.0",
+    description=(
+        "Real-time fraud decisioning for Nigerian fintechs.\n\n"
+        "**/v1** is the authenticated, multi-tenant production API. "
+        "**/api** is the open demo sandbox used by the public UI and is disabled when `DEMO_MODE=false`."
+    ),
+    version="3.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -38,8 +46,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in [chat, fraud, loans, transactions, eval, workflows, media, ab_testing, simulation, cases]:
-    app.include_router(r.router)
+app.include_router(v1.router)
+app.include_router(admin.router)
+
+if settings.demo_mode:
+    for r in [chat, fraud, loans, transactions, eval, workflows, media, ab_testing, simulation, cases]:
+        app.include_router(r.router)
+
+
+@app.get("/healthz", include_in_schema=False)
+async def healthz():
+    return {"status": "ok"}
+
+
+@app.get("/readyz", include_in_schema=False)
+async def readyz():
+    if not db.ping():
+        return JSONResponse({"status": "unavailable", "database": "down"}, status_code=503)
+    return {"status": "ready", "database": "ok"}
 
 
 @app.get("/api/health")
@@ -48,7 +72,9 @@ async def health():
     return {
         "status": "ok",
         "service": "NaijaFinAI Agent",
-        "version": "3.0.0",
+        "version": "3.1.0",
+        "model_version": settings.model_version,
+        "demo_mode": settings.demo_mode,
         "cors_origins": _origins,
         "circuit_breakers": get_circuit_breaker_status(),
         "token_budget": token_budget.get_status(),

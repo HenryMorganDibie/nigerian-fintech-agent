@@ -59,6 +59,9 @@ class Transaction(BaseModel):
     micro_tx_last_10min: int = 0           # card testing — rapid micro-transactions
     is_pos_reversal: bool = False          # POS reversal after flagged tx
     new_beneficiaries_last_hour: int = 0   # beneficiary explosion detection
+    # Platform fields
+    device_id: Optional[str] = None        # stable device fingerprint from the client SDK
+    customer_type: Literal["individual", "corporate"] = "individual"  # selects the CTR threshold
 
 
 class FraudAnalysisRequest(BaseModel):

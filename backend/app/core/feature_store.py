@@ -7,11 +7,13 @@ Enables context-aware fraud scoring:
   - ₦500k is anomalous for User B → high risk
 
 In-memory by default. Redis if REDIS_URL is set.
+
+Every key is namespaced by tenant: one fintech's customers never shape
+another fintech's baselines, even when account identifiers collide.
 """
 
 import json
 import math
-import time
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional
@@ -20,17 +22,30 @@ from app.core.config import settings
 
 # ── In-memory store (thread-safe enough for single-instance Railway) ─────────
 _store: dict[str, dict] = defaultdict(dict)
+_redis_client = None
 
 
 def _redis():
-    """Lazy Redis client — only connects if REDIS_URL is configured."""
+    """Lazy, cached Redis client — only connects if REDIS_URL is configured."""
+    global _redis_client
     if not settings.redis_url:
         return None
-    try:
-        import redis
-        return redis.from_url(settings.redis_url, decode_responses=True)
-    except Exception:
-        return None
+    if _redis_client is None:
+        try:
+            import redis
+            _redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+        except Exception:
+            return None
+    return _redis_client
+
+
+def _key(tenant_id: str, user_id: str) -> str:
+    return f"feature:{tenant_id}:{user_id}"
+
+
+def reset_memory_store():
+    """Test helper: clear the in-memory backend."""
+    _store.clear()
 
 
 def _get(key: str) -> Optional[dict]:
@@ -44,7 +59,7 @@ def _get(key: str) -> Optional[dict]:
 def _set(key: str, value: dict, ttl_seconds: int = 86400 * 30):
     r = _redis()
     if r:
-        r.setex(key, ttl_seconds, json.dumps(value))
+        r.set(key, json.dumps(value), ex=ttl_seconds)
     else:
         _store[key] = value
 
@@ -76,8 +91,8 @@ def _default_profile() -> dict:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def get_user_profile(user_id: str) -> dict:
-    profile = _get(f"feature:{user_id}")
+def get_user_profile(user_id: str, tenant_id: str = "demo") -> dict:
+    profile = _get(_key(tenant_id, user_id))
     if not profile:
         profile = _default_profile()
         profile["user_id"] = user_id
@@ -94,13 +109,13 @@ def update_user_profile(
     location: Optional[str],
     timestamp: Optional[str] = None,
     is_confirmed_legit: bool = False,
+    tenant_id: str = "demo",
 ):
     """
     Update behavioral features after a transaction.
     Call this AFTER a transaction is approved or confirmed.
     """
-    profile = get_user_profile(user_id)
-    now_ts = time.time()
+    profile = get_user_profile(user_id, tenant_id)
 
     profile["tx_count_7d"]    = profile.get("tx_count_7d", 0) + 1
     profile["tx_count_30d"]   = profile.get("tx_count_30d", 0) + 1
@@ -158,19 +173,20 @@ def update_user_profile(
     profile["channels_used"] = channels
 
     profile["_updated_at"] = datetime.now(timezone.utc).isoformat()
-    _set(f"feature:{user_id}", profile)
+    _set(_key(tenant_id, user_id), profile)
 
 
 def compute_behavioral_deviation(user_id: str, amount: float, channel: str,
                                   device_fingerprint: Optional[str],
                                   beneficiary_account: Optional[str],
                                   hour_of_day: int,
-                                  location: Optional[str] = None) -> dict:
+                                  location: Optional[str] = None,
+                                  tenant_id: str = "demo") -> dict:
     """
     Compare current transaction against user's behavioral baseline.
     Returns deviation score (0-100) and contributing factors.
     """
-    profile = get_user_profile(user_id)
+    profile = get_user_profile(user_id, tenant_id)
     factors = []
     deviation_score = 0
 

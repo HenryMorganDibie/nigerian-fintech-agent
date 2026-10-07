@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from typing import Literal
 from datetime import datetime, time
 
+from app.core.regulatory import structuring_band
+
 
 # ── CBN Regulatory Thresholds (with circular references) ─────────────────────
 
@@ -26,8 +28,7 @@ CBN_THRESHOLDS = {
     "tier2_daily_limit_ngn": 200_000,        # Same circular
     "tier3_daily_limit_ngn": 5_000_000,      # Same circular
     "ctr_reporting_threshold_ngn": 5_000_000, # Currency Transaction Report (EFCC/CBN AML guidelines)
-    "str_trigger_ngn": 1_000_000,            # Suspicious Transaction Report threshold
-    "structuring_window_ngn": 999_999,       # Known structuring ceiling to avoid CTR
+    "structuring_window_ngn": 4_999_999,     # Known structuring ceiling to avoid CTR (see app.core.regulatory)
     "pos_single_limit_ngn": 150_000,         # CBN POS transaction limit
     "ussd_single_limit_ngn": 20_000,         # CBN USSD per-transaction cap
     "ussd_daily_limit_ngn": 100_000,         # CBN USSD daily cap
@@ -54,8 +55,8 @@ NIGERIAN_FRAUD_SIGNALS: list[FraudSignal] = [
         name="CBN_STRUCTURING",
         severity="critical",
         score_delta=35,
-        description="Amount is suspiciously close to but below the CTR/STR threshold (₦999,999 zone). "
-                    "Classic structuring to avoid mandatory EFCC reporting.",
+        description="Amount is suspiciously close to but below the ₦5,000,000 CTR threshold (₦4.5M–₦4,999,999 zone). "
+                    "Classic structuring to avoid mandatory NFIU currency transaction reporting.",
         cbn_reference="CBN AML/CFT Regulations 2022, Section 4.3 — Structuring",
         recommended_action="File Suspicious Transaction Report (STR) with NFIU within 24 hours",
     ),
@@ -250,7 +251,8 @@ def evaluate_transaction(
             result.cbn_references.append(s.cbn_reference)
 
     # Structuring
-    if 900_000 <= amount <= 999_999:
+    band_low, band_high = structuring_band("individual")
+    if band_low <= amount < band_high:
         trigger("CBN_STRUCTURING")
 
     # SIM swap indicators
@@ -305,7 +307,8 @@ def evaluate_transaction(
             trigger("ROUND_TRIP_TRANSFER")
 
     # Split transactions
-    if transactions_last_hour >= 3 and (amount * transactions_last_hour) > CBN_THRESHOLDS["str_trigger_ngn"]:
+    ctr = CBN_THRESHOLDS["ctr_reporting_threshold_ngn"]
+    if transactions_last_hour >= 3 and 0 < amount < ctr and (amount * transactions_last_hour) >= ctr:
         trigger("SPLIT_TRANSACTION_PATTERN")
 
     # Determine risk level and action

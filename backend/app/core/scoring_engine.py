@@ -14,6 +14,8 @@ import math
 from dataclasses import dataclass, field
 from typing import Literal, Optional
 
+from app.core.regulatory import ctr_threshold, structuring_band, POS_SINGLE_TX_LIMIT_NGN
+
 
 BASE_FRAUD_PRIOR = 0.023
 
@@ -50,11 +52,11 @@ SIGNALS: list[SignalDef] = [
     SignalDef("NIN_BVN_MISMATCH",              "critical", 45.0, 2.0,  "NIN and BVN details do not match NIMC/NIBSS records — synthetic identity", "CBN BPS/DIR/GEN/CIR/03/002", "Block account + file STR + refer to EFCC Cybercrime"),
     SignalDef("SIM_SWAP_HIGH_VALUE_USSD",       "critical", 22.0, 1.5,  "USSD transfer within 48 hours of SIM replacement", "CBN CPD/DIR/GEN/LAB/13/006", "Freeze account — require in-person BVN re-verification"),
     SignalDef("ROUND_TRIP_TRANSFER",            "critical", 19.6, 1.6,  "Funds returned via a different path within 24 hours — layering pattern", "CBN AML/CFT 2022 §3.1", "Freeze both accounts + file STR immediately"),
-    SignalDef("CBN_STRUCTURING",                "critical", 18.5, 1.4,  "Transaction amount in the ₦900,000–₦999,999 zone — CTR avoidance", "CBN AML/CFT 2022 §4.3", "File STR with NFIU within 24 hours"),
+    SignalDef("CBN_STRUCTURING",                "critical", 18.5, 1.4,  "Transaction amount just below the Currency Transaction Report threshold — CTR avoidance", "MLPPA 2022 (CTR threshold); CBN AML/CFT Regulations", "File STR with NFIU within 24 hours"),
     SignalDef("CARD_TESTING",                   "critical", 17.0, 1.5,  "Multiple micro-transactions in rapid succession — card testing pattern", "CBN Fraud Desk Advisory 2023-07", "Block card immediately and alert issuer"),
     SignalDef("USSD_LOW_VALUE_STRUCTURING",     "high",     14.0, 1.3,  "Repeated low-value USSD transfers in the ₦8,000–₦10,000 range", "CBN AML/CFT 2022 §4.3", "Flag for STR review"),
     SignalDef("AGENT_VELOCITY_SPIKE",           "high",     14.8, 1.3,  "Agent terminal processed more than 20 transactions per hour to unique recipients", "CBN Agent Banking Guidelines 2019 §6.3", "Suspend terminal + file STR"),
-    SignalDef("SPLIT_TRANSACTION_PATTERN",      "high",     13.1, 1.2,  "Multiple transactions in a short window collectively exceeding the STR threshold", "CBN AML/CFT 2022 §4.3", "Aggregate and report as a single STR to NFIU"),
+    SignalDef("SPLIT_TRANSACTION_PATTERN",      "high",     13.1, 1.2,  "Multiple sub-threshold transactions in a short window collectively exceeding the CTR threshold", "MLPPA 2022 (CTR threshold); CBN AML/CFT Regulations", "Aggregate the transactions and assess for STR filing with NFIU"),
     SignalDef("FIRST_PARTY_FRAUD_LOAN",         "high",     12.4, 1.3,  "Full loan disbursement withdrawn to a new recipient within 30 minutes", "CBN MFB Guidelines §8.4", "Hold disbursement + verify loan purpose"),
     SignalDef("BENEFICIARY_EXPLOSION",          "high",     12.0, 1.3,  "Rapid fan-out to multiple new beneficiaries — smurfing pattern", "CBN AML/CFT 2022 §4.3", "Hold + review the full beneficiary list"),
     SignalDef("UNVERIFIED_BVN_LARGE_TRANSFER",  "high",     11.2, 1.2,  "Large transfer from an account with unverified BVN", "CBN BPS/DIR/2020/004", "Suspend transaction + trigger NIBSS BVN re-validation"),
@@ -122,6 +124,7 @@ def compute_signal_score(
     recent_inbound_from_same_ngn: float,
     account_age_days: int,
     new_beneficiaries_last_hour: int,
+    customer_type: str = "individual",
 ) -> SignalScore:
 
     result = SignalScore()
@@ -150,12 +153,14 @@ def compute_signal_score(
                  f"₦{recent_inbound_from_same_ngn:,.0f} from the same counterparty — circular flow.",
                  {"outbound": recent_outbound_ngn, "inbound": recent_inbound_from_same_ngn, "ratio": round(ratio, 2)}, result, lo)
 
-    # ── CBN structuring (₦900k–₦999k) ────────────────────────────────────────
-    if 900_000 <= amount <= 999_999:
+    # ── Structuring just below the CTR threshold ──────────────────────────────
+    ctr = ctr_threshold(customer_type)
+    band_low, band_high = structuring_band(customer_type)
+    if band_low <= amount < band_high:
         _trigger("CBN_STRUCTURING",
-                 f"Amount of ₦{amount:,.0f} falls in the ₦900,000–₦999,999 structuring zone, "
-                 f"just below the CBN Currency Transaction Report threshold of ₦1,000,000.",
-                 {"amount": amount, "threshold": 1_000_000}, result, lo)
+                 f"Amount of ₦{amount:,.0f} falls in the ₦{band_low:,.0f}–₦{band_high - 1:,.0f} structuring zone, "
+                 f"just below the {customer_type} Currency Transaction Report threshold of ₦{ctr:,.0f}.",
+                 {"amount": amount, "threshold": ctr, "customer_type": customer_type}, result, lo)
 
     # ── Card testing ─────────────────────────────────────────────────────────
     if micro_tx_last_10min >= 3 and amount < 500:
@@ -180,20 +185,18 @@ def compute_signal_score(
                  f"(threshold: 20). All to unique recipients.",
                  {"agent_tx_count_last_hour": agent_tx_count_last_hour, "threshold": 20}, result, lo)
 
-    # ── Split transaction — REQUIRES multiple transactions AND collective threshold ──
-    # Bug fix: only fires if transactions_last_hour >= 3 AND total exceeds threshold
-    # A single large transaction MUST NOT trigger this — that is normal behaviour
+    # ── Split transaction: several sub-threshold transfers that together cross the CTR line ──
+    # A single large transaction MUST NOT trigger this; that is a plain CTR, not a split.
     if (transactions_last_hour >= 3
-            and amount > 0
-            and (amount * transactions_last_hour) > 1_000_000
-            and not (transactions_last_hour == 1)):   # explicit guard: 1 transaction cannot be a split
+            and 0 < amount < ctr
+            and (amount * transactions_last_hour) >= ctr):
         total_est = amount * transactions_last_hour
         _trigger("SPLIT_TRANSACTION_PATTERN",
                  f"{transactions_last_hour} transactions in the last hour. "
                  f"Average amount ₦{amount:,.0f} per transaction. "
-                 f"Estimated aggregate: ₦{total_est:,.0f}, which exceeds the "
-                 f"₦1,000,000 STR threshold.",
-                 {"transactions_last_hour": transactions_last_hour, "amount_per_tx": amount, "estimated_total": total_est, "str_threshold": 1_000_000}, result, lo)
+                 f"Estimated aggregate: ₦{total_est:,.0f}, which crosses the "
+                 f"₦{ctr:,.0f} CTR threshold while each transfer stays below it.",
+                 {"transactions_last_hour": transactions_last_hour, "amount_per_tx": amount, "estimated_total": total_est, "ctr_threshold": ctr}, result, lo)
 
     # ── First-party loan fraud ────────────────────────────────────────────────
     if is_post_loan_disbursement and is_new_recipient and transactions_last_hour >= 1:
@@ -253,10 +256,10 @@ def compute_signal_score(
                  {"hour_of_day": hour_of_day, "channel": channel}, result, lo)
 
     # ── POS above limit ───────────────────────────────────────────────────────
-    if is_pos and amount > 150_000:
+    if is_pos and amount > POS_SINGLE_TX_LIMIT_NGN:
         _trigger("POS_ABOVE_CBN_LIMIT",
-                 f"POS transaction of ₦{amount:,.0f} exceeds the CBN single-transaction limit of ₦150,000.",
-                 {"amount": amount, "cbn_limit": 150_000}, result, lo)
+                 f"POS transaction of ₦{amount:,.0f} exceeds the configured single-transaction limit of ₦{POS_SINGLE_TX_LIMIT_NGN:,.0f}.",
+                 {"amount": amount, "cbn_limit": POS_SINGLE_TX_LIMIT_NGN}, result, lo)
 
     # ── Weekend midnight spike ────────────────────────────────────────────────
     if day_of_week in (4, 5) and 0 <= hour_of_day <= 3 and transactions_last_hour >= 2 and amount > 30_000:
@@ -272,10 +275,6 @@ def compute_signal_score(
     result.score = min(100, int(posterior * 100))
 
     # ── Top 3 by impact ───────────────────────────────────────────────────────
-    sorted_t = sorted(result.triggered, key=lambda s: s.weight * s.likelihood_ratio
-                      if hasattr(s, 'weight') else s.likelihood_ratio, reverse=True)
-
-    # Look up weight from SIGNAL_MAP
     def get_weight(ts): return SIGNAL_MAP[ts.name].weight if ts.name in SIGNAL_MAP else 1.0
     sorted_t = sorted(result.triggered, key=lambda s: get_weight(s) * s.likelihood_ratio, reverse=True)
 
