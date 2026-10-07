@@ -25,7 +25,7 @@
 10. [Nigerian Fraud Signal Library](#10-nigerian-fraud-signal-library)
 11. [Language Intelligence](#11-language-intelligence)
 12. [Compliance Engine](#12-compliance-engine)
-13. [LLM Setup — Dual Groq Models](#13-llm-setup--dual-groq-models)
+13. [LLM Setup — Rotating Providers](#13-llm-setup--rotating-providers-ollama--groq--openai--anthropic)
 14. [Full File Structure](#14-full-file-structure)
 15. [API Reference](#15-api-reference)
 16. [Frontend — 6 Tabs Explained](#16-frontend--6-tabs-explained)
@@ -85,10 +85,10 @@ NaijaFinAI fills this gap with infrastructure built natively for this ecosystem.
 | Nigerian fraud signals | **18** in the decision engine, each with a regulatory reference and evidence string |
 | Likelihood ratios | **3.8× to 45×**, expert-set (to be re-estimated from client labels) |
 | Synthetic regression set | **40 hand-written samples** (20 fraud, 20 legit): precision 1.00, recall 0.55, F1 0.71. A sanity check, not a performance claim |
-| Automated tests | **50** (unit, API, tenant isolation, idempotency, audit tamper detection, concurrency on Postgres) |
+| Automated tests | **74** (unit, API, tenant isolation, idempotency, audit tamper detection, Postgres concurrency, LLM failover over real HTTP) |
 | Languages supported | **5** — English, Pidgin, Yoruba, Hausa, Igbo |
 | API endpoints | **20+** across fraud, loans, chat, eval, A/B, cases, simulation |
-| LLM providers supported | **4** — Groq (default/free), OpenAI, Anthropic, Google |
+| LLM providers supported | **5** — local Ollama pool, Groq (free), OpenAI, Anthropic, Google — rotated with health-aware failover |
 | Groq daily free tokens | **100k** primary + **500k** fallback |
 | `/v1/decisions` latency | **p50 15.8 ms · p99 22.6 ms** in-process on Postgres + Redis (n = 1,000); LLM never on this path |
 | Analyst narrative (LLM, on demand) | **~2–4 s**, generated separately via `/v1/decisions/{id}/explanation` |
@@ -139,7 +139,7 @@ NaijaFinAI fills this gap with infrastructure built natively for this ecosystem.
 | Regulatory output | "Flag for review" | Exact NFIU/EFCC form URLs, CBN circular citations, deadlines |
 | Audit trail | Mutable logs | Hash-chained per tenant; any edit, deletion or reordering is detectable via `/v1/audit/verify` |
 | NDPA data minimisation | None | Account ids pseudonymised (keyed HMAC) in storage and audit; PII scrubbed before any LLM call |
-| LLM reliability | Single provider | Dual Groq models with auto-fallback + circuit breaker |
+| LLM reliability | Single provider | Rotating Ollama → Groq → OpenAI → Anthropic chain with per-model cooldowns; on-prem-only mode |
 | Feedback loop | None | Confirmed outcomes recorded per decision (`/v1/decisions/{id}/labels`) → live precision/recall per tenant |
 | Drift detection | None | PSI-based distribution drift, fraud rate spike alerts |
 | Evaluation harness | None | Upload labelled CSV history or label live decisions; synthetic set kept as a regression check |
@@ -155,9 +155,7 @@ NaijaFinAI fills this gap with infrastructure built natively for this ecosystem.
 |---|---|---|
 | **Backend framework** | FastAPI (Python 3.11) | Async, fast, auto-generates OpenAPI docs |
 | **AI agent** | LangChain 1.x (`bind_tools` loop) | Works without `AgentExecutor` (removed in LangChain 1.x) |
-| **Primary LLM** | Groq — `llama-3.3-70b-versatile` | Free, fastest inference available, 100k tokens/day |
-| **Fallback LLM** | Groq — `llama-3.1-8b-instant` | Free, 500k tokens/day, auto-activated on rate limit |
-| **Optional LLMs** | OpenAI GPT-4o, Anthropic Claude, Google Gemini | Switchable per-request |
+| **LLM routing** | Health-aware rotation: local Ollama pool, Groq (gpt-oss-120b/20b, Llama 3.3/3.1), OpenAI, Anthropic Claude | Free by default, real failover on 429/timeouts, on-prem mode for data residency |
 | **Data validation** | Pydantic v2 | Strict schema validation for all API inputs/outputs |
 | **Settings** | pydantic-settings | `.env` loading with type safety |
 | **Feature store** | In-memory dict → Redis | Behavioral memory; Redis activated via `REDIS_URL` env var |
@@ -505,24 +503,41 @@ Fields stripped before sending to any LLM:
 
 ---
 
-## 13. LLM Setup — Dual Groq Models
+## 13. LLM Setup — Rotating Providers (Ollama → Groq → OpenAI → Anthropic)
+
+The LLM writes narratives and powers chat. It never makes or delays a payment decision. Every LLM call goes through one router ([`backend/app/core/llm_router.py`](backend/app/core/llm_router.py)), ported from the provider router in [interview-copilot](https://github.com/HenryMorganDibie/interview-copilot):
 
 ```
-Primary:  llama-3.3-70b-versatile   100,000 tokens/day  ← best quality
-Fallback: llama-3.1-8b-instant      500,000 tokens/day  ← auto on HTTP 429
+Ollama pool  →  Groq gpt-oss-120b  →  Groq gpt-oss-20b  →  Groq llama-3.3-70b  →  Groq llama-3.1-8b  →  OpenAI  →  Anthropic
+ (position set by LLM_LOCAL_POOL)        (GROQ_MODELS, strongest first)                                (only if a key is set)
 ```
 
-Both are **free** on Groq. No credit card required.
+| Behaviour | Detail |
+|---|---|
+| **Real failover** | Each call walks the chain until a model answers. A 429 from Groq's free tier moves to the next model in milliseconds; SDK retries are disabled (`max_retries=0`) so no time is burned retrying a rate-limited model. |
+| **Health-aware cooldowns** | Rate limit (429, or Anthropic 529 overload): model parked 60 s. Timeouts and errors: exponential back-off 2 s → 5 min. One success clears the record. If every model is cooling down, the router still tries them rather than refusing. |
+| **Local model pool** | Discovers whatever is pulled on the Ollama server (`/api/tags`, including Ollama's free `-cloud` models), benchmarks models one at a time (smallest first, stopping at the first that answers within 5 s), and routes to the fastest healthy model above a quality floor. Code-tuned models score below conversational ones. Re-benchmarks every 10 minutes; a crashing model is cooled down and the next-fastest answers in the same call. |
+| **Two profiles** | *Interactive* (chat, analyst explanations): remote first, Ollama as the last resort, so nobody waits on a cold local load. *Batch* (workflows, statement insights): Ollama first, because it is free. |
+| **Data residency** | `LLM_LOCAL_POOL=only` routes every call to on-machine Ollama models and excludes `-cloud` models, so no customer data leaves the deployment. A bank can run the whole product on-prem. |
+| **Attribution** | Every reply records which model produced it (`routed_provider`, e.g. `groq:openai/gpt-oss-20b` or `ollama:llama3.2:3b`). `/v1` explanations write it into the audit chain; chat returns it as `provider_used`. |
+| **Graceful degradation** | If every provider is down, `/api/fraud/analyze` returns the deterministic evidence instead of an error, and `/v1/decisions/{id}/explanation` returns `503 explanation_unavailable`. Decisions are unaffected either way. |
 
-**Circuit breaker:** 3 consecutive failures → 10-minute cooldown per provider.
+| `LLM_LOCAL_POOL` | Interactive calls | Batch calls |
+|---|---|---|
+| `last` (default) | remote → Ollama | Ollama → remote |
+| `first` | Ollama → remote | Ollama → remote |
+| `off` | remote only | remote only |
+| `only` | on-machine Ollama only | on-machine Ollama only |
 
-**Token budget:** Tracks daily usage. When primary runs low, routes to fallback automatically.
+Live health of every candidate, cooldowns and local benchmark latencies: `GET /api/health` → `llm`.
 
-**Switch provider per-request:**
+**Pick a provider per request** (moves it to the front; the rest of the chain still backs it up):
 ```json
 POST /api/fraud/analyze
-{ "transaction": {...}, "provider": "openai" }
+{ "transaction": {...}, "provider": "anthropic" }
 ```
+
+**Run a local pool:** `docker compose --profile local-llm up`, then `docker compose exec ollama ollama pull llama3.2:3b` and set `OLLAMA_BASE_URL=http://ollama:11434`.
 
 ---
 
@@ -558,7 +573,8 @@ nigerian-fintech-agent/
 │       │   ├── token_budget.py        Daily token budget + model selection
 │       │   ├── compliance.py          NDPA audit logs + NFIU filing tracker
 │       │   ├── language.py            Pidgin/Yoruba/Hausa/Igbo detection + glossary
-│       │   ├── llm_factory.py         Multi-provider + circuit breaker + fallback
+│       │   ├── llm_router.py          Rotating provider router: Ollama pool, Groq, OpenAI, Anthropic
+│       │   ├── llm_factory.py         Backwards-compatible entry points over the router
 │       │   ├── prompts.py             Nigeria-specialised system prompts
 │       │   └── config.py              Settings, dual Groq, Redis URL, CORS
 │       ├── agents/fintech_agent.py    LangChain bind_tools loop (1.x compatible)
@@ -642,7 +658,7 @@ POST /api/cases/{id}/resolve       Resolve as fraud or false positive
 GET  /api/cases/{id}/str-draft     Generate CBN-compliant STR document
 POST /api/media/voice              Upload audio → Groq Whisper transcription
 POST /api/media/upload             Upload PDF/CSV/image → fraud signal scan
-GET  /api/health                   Health + circuit breakers + token budget
+GET  /api/health                   Health + LLM router state (per-model cooldowns, local benchmarks) + token budget
 GET  /api/providers                List configured LLM providers
 ```
 
@@ -763,7 +779,7 @@ CORS_ORIGINS=http://localhost:5173,http://localhost:3000
 ```bash
 cd backend
 pip install -r requirements-dev.txt
-python -m pytest -q                      # 48 pass, 2 Postgres-only tests skip on SQLite
+python -m pytest -q                      # 72 pass, 2 Postgres-only tests skip on SQLite
 ADMIN_TOKEN=change-me uvicorn main:app --reload --port 8000
 ```
 
@@ -893,7 +909,7 @@ Covers: fraud analysis (all risk levels), loan eligibility, chat, simulations, d
 | In-memory case queue | PostgreSQL, wired to `/v1` decisions |
 | In-memory A/B results | PostgreSQL + Grafana |
 | `create_all` schema bootstrap | Alembic migrations |
-| Groq free tier | Groq paid, or self-hosted Ollama on GPU |
+| ~~Single LLM provider~~ | ✅ Rotating router with local Ollama pool and on-prem-only mode |
 | Single Railway instance | Railway Pro / GCP Cloud Run |
 | Manual signal calibration | MLflow + scheduled retraining on confirmed fraud labels |
 | In-memory drift monitor | InfluxDB + Grafana + PagerDuty alerts |

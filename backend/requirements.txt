@@ -27,6 +27,7 @@ langchain>=0.3
 langchain-groq>=0.2
 langchain-openai>=0.2
 langchain-anthropic>=0.2
+langchain-ollama>=1.0
 
 # ── File parsing (lazy-loaded, small) ────────────────────────
 pypdf>=4.0.0

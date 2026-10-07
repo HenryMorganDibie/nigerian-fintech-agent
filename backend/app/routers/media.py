@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from app.core.language import detect_language, enrich_context_with_glossary
 from app.core.config import settings
 from app.core.llm_factory import get_llm
+from app.core.llm_router import message_text
 from langchain_core.messages import HumanMessage, SystemMessage
 import tempfile, os, json
 
@@ -103,17 +104,16 @@ async def analyze_file(
                     {"type": "text", "text": "Extract all visible text. Include transaction details, amounts, dates."},
                 ])
                 resp = llm.invoke([msg])
-                extracted_text = resp.content
+                extracted_text = message_text(resp)
             else:
                 extracted_text = "[Image uploaded — OpenAI key needed for vision extraction]"
 
         # Fraud scan via LLM
         if extracted_text and extracted_text != "[Image uploaded — OpenAI key needed for vision extraction]":
-            llm = get_llm(provider=provider)
             scan_prompt = (
                 f"Document (first 2000 chars):\n{extracted_text[:2000]}\n\n"
                 "You are a Nigerian fintech fraud analyst. Scan for:\n"
-                "1. Structuring (amounts near ₦999,999)\n"
+                "1. Structuring (amounts just below the ₦5,000,000 CTR threshold, or several transfers that together cross it)\n"
                 "2. Scam keywords (forex, investment returns, lottery, urgent)\n"
                 "3. Round-trip transfers or mule patterns\n"
                 "4. BVN/NIN issues\n"
@@ -124,7 +124,7 @@ async def analyze_file(
                 SystemMessage(content="Nigerian fintech compliance analyst. Return only valid JSON."),
                 HumanMessage(content=scan_prompt),
             ])
-            raw = resp.content.strip().replace("```json", "").replace("```", "").strip()
+            raw = message_text(resp).strip().replace("```json", "").replace("```", "").strip()
             try:
                 analysis = json.loads(raw)
             except Exception:

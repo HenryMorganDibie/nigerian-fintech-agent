@@ -129,16 +129,18 @@ def test_explanation_is_generated_on_demand_and_cached(client, make_tenant, monk
 
     class FakeLLM:
         def invoke(self, messages):
+            from langchain_core.messages import AIMessage
             calls.append(messages)
-            class R: content = "  Account takeover via SIM swap.  "
-            return R()
+            return AIMessage(content="  Account takeover via SIM swap.  ",
+                             response_metadata={"routed_provider": "groq:openai/gpt-oss-120b"})
     monkeypatch.setattr(lf, "get_llm_with_fallback", lambda **k: FakeLLM())
 
     _, auth = make_tenant()
     d = client.post("/v1/decisions", json={"transaction": tx(**SIM_SWAP)}, headers=auth).json()
     first = client.post(f"/v1/decisions/{d['id']}/explanation", headers=auth).json()
     second = client.post(f"/v1/decisions/{d['id']}/explanation", headers=auth).json()
-    assert first == {"id": d["id"], "explanation": "Account takeover via SIM swap.", "cached": False}
+    assert first == {"id": d["id"], "explanation": "Account takeover via SIM swap.", "cached": False,
+                     "provider": "groq:openai/gpt-oss-120b"}
     assert second["cached"] is True and len(calls) == 1
     prompt = calls[0][1].content
     assert "0123456789" not in prompt and "9876543210" not in prompt

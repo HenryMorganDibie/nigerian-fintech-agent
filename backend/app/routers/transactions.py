@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from app.models.schemas import TransactionInsightsRequest, TransactionInsightsResponse
 from app.core.llm_factory import get_llm
+from app.core.llm_router import message_text
 from app.core.prompts import TRANSACTION_SYSTEM_PROMPT
 from app.core.config import settings
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -12,7 +13,7 @@ router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 @router.post("/insights", response_model=TransactionInsightsResponse)
 async def transaction_insights(req: TransactionInsightsRequest):
     provider = req.provider or settings.default_llm_provider
-    llm = get_llm(provider=provider)
+    llm = get_llm(provider=provider, profile="batch")
 
     debits = [t for t in req.transactions if t.type == "debit"]
     credits = [t for t in req.transactions if t.type == "credit"]
@@ -36,7 +37,7 @@ async def transaction_insights(req: TransactionInsightsRequest):
     )
 
     response = llm.invoke([SystemMessage(content=TRANSACTION_SYSTEM_PROMPT), HumanMessage(content=prompt)])
-    raw = response.content.strip().replace("```json", "").replace("```", "").strip()
+    raw = message_text(response).strip().replace("```json", "").replace("```", "").strip()
 
     try:
         data = json.loads(raw)

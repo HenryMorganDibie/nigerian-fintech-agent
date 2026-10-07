@@ -76,7 +76,7 @@ async def health():
         "model_version": settings.model_version,
         "demo_mode": settings.demo_mode,
         "cors_origins": _origins,
-        "circuit_breakers": get_circuit_breaker_status(),
+        "llm": get_circuit_breaker_status(),
         "token_budget": token_budget.get_status(),
     }
 

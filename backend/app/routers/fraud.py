@@ -4,6 +4,7 @@ from app.core.pipeline import run_pipeline
 from app.core.security import customer_ref
 from app.core.compliance import AuditLogEntry, scrub_pii_for_llm
 from app.core.llm_factory import get_llm_with_fallback
+from app.core.llm_router import message_text
 from app.core.prompts import FRAUD_SYSTEM_PROMPT
 from app.core.config import settings
 from app.models.schemas import FraudAnalysisRequest
@@ -54,8 +55,9 @@ async def analyze_fraud(req: FraudAnalysisRequest):
         "graph_score": graph["graph_risk_score"],
     })
 
-    llm = get_llm_with_fallback(provider=provider)
-    llm_resp = llm.invoke([
+    llm_resp = None
+    try:
+        llm_resp = get_llm_with_fallback(provider=provider).invoke([
         SystemMessage(content=FRAUD_SYSTEM_PROMPT),
         HumanMessage(content=(
             f"Fraud analysis for customer {customer_alias}, transaction {tx.transaction_id}:\n\n"
@@ -65,14 +67,22 @@ async def analyze_fraud(req: FraudAnalysisRequest):
             "If signal_evidence says 'No fraud signals triggered', report that clearly and explain "
             "which factors contributed to the low risk score."
         )),
-    ])
+        ])
+        narrative = message_text(llm_resp).strip()
+        provider_used = llm_resp.response_metadata.get("routed_provider", provider)
+    except Exception:
+        # Every provider is down or rate-limited: the decision stands on its own,
+        # so return the deterministic evidence instead of failing the request.
+        narrative = ("Narrative unavailable (all LLM providers are down or rate-limited). "
+                     "Deterministic evidence:\n" + sig.evidence_summary)
+        provider_used = "rules_only"
 
     # ── Audit log ─────────────────────────────────────────────────────────
     audit = AuditLogEntry(
         event_type="fraud_analysis", transaction_id=tx.transaction_id,
         ai_decision=decision.risk_level, risk_score=decision.composite_score,
         signals_triggered=[s.name for s in sig.triggered], cbn_references=sig.cbn_references,
-        llm_provider=provider,
+        llm_provider=provider_used,
         human_review_required=decision.decision in ("review_queue", "escalate", "freeze_and_str"),
         data_retention_expires=(datetime.now(timezone.utc) + timedelta(days=365*5)).isoformat(),
     )
@@ -101,9 +111,9 @@ async def analyze_fraud(req: FraudAnalysisRequest):
              "regulatory_body": f.regulatory_body, "urgency_hours": f.urgency_hours}
             for f in filings
         ],
-        "llm_narrative":            llm_resp.content.strip(),
+        "llm_narrative":            narrative,
         "audit_log_id":             audit.audit_id,
-        "provider_used":            provider,
+        "provider_used":            provider_used,
         "created_at":               datetime.now(timezone.utc).isoformat(),
     }
 

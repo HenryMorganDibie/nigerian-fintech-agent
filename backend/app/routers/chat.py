@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from app.models.schemas import ChatRequest, ChatResponse
@@ -14,6 +16,8 @@ async def chat(req: ChatRequest):
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
-    reply, provider, tool_calls, language, audit_id = run_agent(req.message, req.history, req.provider)
+    # The agent makes blocking network calls (and may walk the failover chain); keep the event loop free.
+    reply, provider, tool_calls, language, audit_id = await asyncio.to_thread(
+        run_agent, req.message, req.history, req.provider)
     return ChatResponse(reply=reply, provider_used=provider, tool_calls=tool_calls,
                         language_detected=language, audit_id=audit_id)

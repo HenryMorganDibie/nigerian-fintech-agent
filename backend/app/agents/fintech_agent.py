@@ -3,8 +3,11 @@ NaijaFinAI Agent — LangChain 1.x compatible
 Uses bind_tools + manual tool-call loop (no AgentExecutor needed).
 """
 
+import asyncio
+
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
-from app.core.llm_factory import get_llm, get_llm_with_fallback
+from app.core.llm_factory import get_llm_with_fallback
+from app.core.llm_router import message_text
 from app.core.prompts import BASE_SYSTEM_PROMPT
 from app.core.language import detect_language, LANGUAGE_INSTRUCTIONS, enrich_context_with_glossary
 from app.core.compliance import AuditLogEntry
@@ -105,8 +108,9 @@ def run_agent(
 
             messages.append(ToolMessage(content=str(result), tool_call_id=tool_id))
 
-    reply = response.content if hasattr(response, "content") else "I encountered an issue. Please try again."
-    return reply, provider, tool_calls_made, language, audit.audit_id
+    reply = message_text(response) or "I encountered an issue. Please try again."
+    served_by = response.response_metadata.get("routed_provider", provider)
+    return reply, served_by, tool_calls_made, language, audit.audit_id
 
 
 async def run_agent_stream(
@@ -120,7 +124,7 @@ async def run_agent_stream(
     yield f"data: {json.dumps({'type': 'language', 'language': language})}\n\n"
 
     try:
-        reply, _, tool_calls, _, audit_id = run_agent(message, history, provider)
+        reply, served_by, tool_calls, _, audit_id = await asyncio.to_thread(run_agent, message, history, provider)
     except Exception as e:
         yield f"data: {json.dumps({'type': 'token', 'content': f'Error: {str(e)}'})}\n\n"
         yield f"data: {json.dumps({'type': 'done', 'provider': provider, 'audit_id': ''})}\n\n"
@@ -133,4 +137,4 @@ async def run_agent_stream(
     for i in range(0, len(reply), chunk_size):
         yield f"data: {json.dumps({'type': 'token', 'content': reply[i:i+chunk_size]})}\n\n"
 
-    yield f"data: {json.dumps({'type': 'done', 'provider': provider, 'audit_id': audit_id})}\n\n"
+    yield f"data: {json.dumps({'type': 'done', 'provider': served_by, 'audit_id': audit_id})}\n\n"

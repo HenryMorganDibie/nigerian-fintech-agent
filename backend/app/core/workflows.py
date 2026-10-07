@@ -15,6 +15,7 @@ from app.core.nigeria_intelligence import evaluate_transaction
 from app.core.bayesian_scorer import bayesian_fraud_score
 from app.core.compliance import get_required_filings, AuditLogEntry
 from app.core.llm_factory import get_llm
+from app.core.llm_router import message_text
 from app.core.config import settings
 from langchain_core.messages import HumanMessage, SystemMessage
 import uuid, json
@@ -53,7 +54,7 @@ def _make_audit(provider: str, event: str, risk_level: str, signals: list[str], 
 
 def run_workflow(scenario_id: str, provider: str | None = None) -> dict:
     provider = provider or settings.default_llm_provider
-    llm = get_llm(provider=provider)
+    llm = get_llm(provider=provider, profile="batch")
     now = datetime.now(timezone.utc)
     case_id = str(uuid.uuid4())[:12]
     steps = []
@@ -185,7 +186,7 @@ def run_workflow(scenario_id: str, provider: str | None = None) -> dict:
         SystemMessage(content="You are a Nigerian fintech compliance AI. Be concise and cite CBN regulations."),
         HumanMessage(content=narrative_prompt),
     ])
-    narrative = llm_response.content.strip()
+    narrative = message_text(llm_response).strip()
 
     # Build CaseOutput
     filings = get_required_filings(

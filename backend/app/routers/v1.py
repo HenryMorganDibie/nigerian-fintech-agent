@@ -254,6 +254,7 @@ def explain_decision(decision_id: str, tenant: Tenant = Depends(require_tenant),
 
     from app.core.compliance import scrub_pii_for_llm
     from app.core.llm_factory import get_llm_with_fallback
+    from app.core.llm_router import message_text
     from app.core.prompts import FRAUD_SYSTEM_PROMPT
     from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -268,7 +269,7 @@ def explain_decision(decision_id: str, tenant: Tenant = Depends(require_tenant),
         "regulatory_filings": r["regulatory_filings"],
     })
     try:
-        llm = get_llm_with_fallback(provider=settings.default_llm_provider)
+        llm = get_llm_with_fallback()
         out = llm.invoke([
             SystemMessage(content=FRAUD_SYSTEM_PROMPT),
             HumanMessage(content=(
@@ -280,15 +281,16 @@ def explain_decision(decision_id: str, tenant: Tenant = Depends(require_tenant),
     except Exception as exc:
         raise _error(503, "explanation_unavailable", f"No LLM provider available: {type(exc).__name__}")
 
-    d.explanation = out.content.strip()
+    d.explanation = message_text(out).strip()
+    served_by = out.response_metadata.get("routed_provider", "unknown")
     append_event(db, tenant.id, "decision.explained", d.id,
-                 {"decision_id": d.id, "provider": settings.default_llm_provider,
+                 {"decision_id": d.id, "provider": served_by,
                   "explanation_sha256": hashlib.sha256(d.explanation.encode()).hexdigest()})
     try:
         db.commit()
     except IntegrityError:
         db.rollback()
-    return {"id": d.id, "explanation": d.explanation, "cached": False}
+    return {"id": d.id, "explanation": d.explanation, "cached": False, "provider": served_by}
 
 
 @router.get("/metrics/summary")

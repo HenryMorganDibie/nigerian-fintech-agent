@@ -24,11 +24,25 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-4-20250514"
+    anthropic_model: str = "claude-opus-5-5"
     google_api_key: str = ""
     google_model: str = "gemini-1.5-pro"
 
-    default_llm_provider: Literal["openai", "anthropic", "google", "groq"] = "groq"
+    default_llm_provider: Literal["openai", "anthropic", "google", "groq", "ollama"] = "groq"
+
+    # ── LLM rotation (see app/core/llm_router.py) ──────────────────────────
+    # Comma-separated, strongest first. Empty = gpt-oss-120b, gpt-oss-20b,
+    # then GROQ_MODEL and GROQ_FALLBACK_MODEL.
+    groq_models: str = ""
+    # Optional OpenAI-compatible gateway in front of Groq. Empty = api.groq.com.
+    groq_base_url: str = ""
+    # Local Ollama pool. Empty disables it.
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    # first | last | off | only  ("only" = on-machine models only, for data residency)
+    llm_local_pool: Literal["first", "last", "off", "only"] = "last"
+    ollama_min_quality: float = 0.5
+    ollama_timeout_s: float = 30.0
+    llm_timeout_s: float = 20.0
 
     # ── Feature store (in-memory by default, Redis if URL provided) ────────
     redis_url: str = ""
@@ -64,16 +78,20 @@ settings = Settings()
 
 
 def get_available_providers() -> list[dict]:
+    """Choices for the UI provider picker. Picking one moves it to the front of the rotation."""
+    from app.core.llm_router import groq_model_order
     providers = []
     if settings.groq_api_key:
-        providers.append({"id": "groq",      "name": "Groq LLaMA-3.3-70B (Free)", "model": settings.groq_model})
-        providers.append({"id": "groq_fast", "name": "Groq LLaMA-3-70B (Fallback)", "model": settings.groq_fallback_model})
+        providers.append({"id": "groq", "name": f"Groq ({', '.join(groq_model_order())})",
+                          "model": groq_model_order()[0]})
     if settings.openai_api_key:
-        providers.append({"id": "openai",    "name": "OpenAI GPT-4o",  "model": settings.openai_model})
+        providers.append({"id": "openai",    "name": f"OpenAI {settings.openai_model}", "model": settings.openai_model})
     if settings.anthropic_api_key:
-        providers.append({"id": "anthropic", "name": "Claude Sonnet",  "model": settings.anthropic_model})
+        providers.append({"id": "anthropic", "name": f"Anthropic {settings.anthropic_model}", "model": settings.anthropic_model})
     if settings.google_api_key:
-        providers.append({"id": "google",    "name": "Gemini 1.5 Pro", "model": settings.google_model})
+        providers.append({"id": "google",    "name": f"Google {settings.google_model}", "model": settings.google_model})
+    if settings.ollama_base_url and settings.llm_local_pool != "off":
+        providers.append({"id": "ollama", "name": "Local Ollama pool (fastest healthy model)", "model": "auto"})
     return providers
 
 
@@ -82,8 +100,7 @@ def validate_startup():
     print(f"  .env path        : {ENV_FILE}")
     print(f"  Default provider : {settings.default_llm_provider}")
     print(f"  CORS origins     : {settings.cors_origins}")
-    print(f"  Groq primary     : {settings.groq_model}")
-    print(f"  Groq fallback    : {settings.groq_fallback_model}")
+    print(f"  LLM local pool   : {settings.llm_local_pool}")
     print(f"  Feature store    : {'Redis @ ' + settings.redis_url if settings.redis_url else 'In-memory (no Redis URL set)'}")
     keys = {
         "groq":      settings.groq_api_key,
@@ -93,12 +110,13 @@ def validate_startup():
     }
     for name, key in keys.items():
         print(f"  {name:<12}: {'✅ ready' if key else '⚠️  not set'}")
-    active = keys.get(settings.default_llm_provider, "")
-    if not active:
-        print(f"\n  ❌ ERROR: DEFAULT_LLM_PROVIDER='{settings.default_llm_provider}' but key is empty!")
-        print(f"     → Set {settings.default_llm_provider.upper()}_API_KEY in Railway environment variables\n")
+    pool = settings.llm_local_pool if settings.ollama_base_url else "off"
+    print(f"  ollama pool : {pool}" + (f" @ {settings.ollama_base_url}" if pool != "off" else ""))
+    if not any(keys.values()) and pool == "off":
+        print("\n  ❌ No LLM provider configured: chat and narratives will be unavailable.")
+        print("     → Set GROQ_API_KEY (free), ANTHROPIC_API_KEY, or OLLAMA_BASE_URL\n")
     else:
-        print(f"\n  ✅ Ready — {settings.default_llm_provider.upper()} / {settings.groq_model}\n")
+        print("\n  ✅ LLM rotation ready (see /api/health → llm)\n")
     db_kind = settings.database_url.split(":", 1)[0]
     print(f"  Database         : {db_kind}")
     print(f"  Demo sandbox     : {'mounted at /api' if settings.demo_mode else 'disabled'}")
