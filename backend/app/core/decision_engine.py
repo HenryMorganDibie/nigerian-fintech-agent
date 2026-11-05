@@ -53,7 +53,7 @@ HARD_OVERRIDES = [
     },
     {
         "name": "CARD_TESTING_DETECTED",
-        "check": lambda sigs, amt: "CARD_TESTING" in sigs,
+        "check": lambda sigs, amt: any(s.startswith("CARD_TESTING") for s in sigs),
         "action": "🚨 Block card immediately — card testing pattern. Alert card issuer and block card number",
     },
     {
@@ -184,6 +184,9 @@ class DriftMonitor:
         baseline = scores[:50] if len(scores) >= 100 else scores[:max(1, len(scores)//2)]
         recent_mean = statistics.mean(recent)
         baseline_mean = statistics.mean(baseline)
+        # Relative mean shift of the score distribution (recent window vs baseline).
+        # This is a simple drift proxy, not a binned Population Stability Index.
+        # The response key stays "psi" for API backward compatibility.
         psi = abs(recent_mean - baseline_mean) / max(baseline_mean, 1)
 
         alerts = []
