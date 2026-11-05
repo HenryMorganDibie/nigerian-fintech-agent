@@ -6,7 +6,7 @@
 [![Backend API](https://img.shields.io/badge/Backend_API-Railway-8B5CF6?style=flat-square)](https://nigerian-fintech-agent-production.up.railway.app/docs)
 [![LLM](https://img.shields.io/badge/LLM-Groq_Free_Tier-00E676?style=flat-square)](https://console.groq.com)
 [![Python](https://img.shields.io/badge/Python-3.11-blue?style=flat-square)](https://python.org)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/License-Proprietary-lightgrey?style=flat-square)](LICENSE)
 
 ---
 
@@ -118,7 +118,7 @@ NaijaFinAI fills this gap with infrastructure built natively for this ecosystem.
 
 ![Monitoring Dashboard](assets/screenshots/monitoring-dashboard.svg)
 
-*Live precision/recall/F1 per signal, PSI-based drift detection, score distribution histogram, real-time fraud rate monitoring, and analyst feedback submission interface.*
+*Live precision/recall/F1 per signal, score-mean-shift drift detection, score distribution histogram, real-time fraud rate monitoring, and analyst feedback submission interface.*
 
 ---
 
@@ -141,7 +141,7 @@ NaijaFinAI fills this gap with infrastructure built natively for this ecosystem.
 | NDPA data minimisation | None | Account ids pseudonymised (keyed HMAC) in storage and audit; PII scrubbed before any LLM call |
 | LLM reliability | Single provider | Rotating Ollama → Groq → OpenAI → Anthropic chain with per-model cooldowns; on-prem-only mode |
 | Feedback loop | None | Confirmed outcomes recorded per decision (`/v1/decisions/{id}/labels`) → live precision/recall per tenant |
-| Drift detection | None | PSI-based distribution drift, fraud rate spike alerts |
+| Drift detection | None | Score mean-shift drift monitoring, fraud rate spike alerts |
 | Evaluation harness | None | Upload labelled CSV history or label live decisions; synthetic set kept as a regression check |
 | A/B testing | None | 3-variant traffic routing with performance comparison |
 | Case management | None | Full investigation workflow: assign, escalate, STR draft |
@@ -262,7 +262,7 @@ Transaction Event
        ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  LAYER 7 — Drift Monitor  (DriftMonitor)                    │
-│  PSI drift detection, fraud rate spike alerts,              │
+│  Score-drift detection, fraud rate spike alerts,              │
 │  signal frequency decay monitoring                          │
 │  GET /api/fraud/drift                                       │
 └─────────────────────────────────────────────────────────────┘
@@ -606,7 +606,7 @@ nigerian-fintech-agent/
 │       │   ├── EvalDashboard.jsx      Precision/recall/F1 + confusion matrix
 │       │   ├── WorkflowDemo.jsx       One-click workflow runner
 │       │   ├── SimulationPanel.jsx    6 Nigerian attack simulations
-│       │   ├── MonitoringDashboard.jsx PSI drift + feedback loop UI
+│       │   ├── MonitoringDashboard.jsx Score drift + feedback loop UI
 │       │   └── MediaInput.jsx         Voice recorder + file fraud scan
 │       └── utils/
 │           ├── api.js                 Complete client — all 20+ endpoints
@@ -633,7 +633,7 @@ nigerian-fintech-agent/
 POST /api/chat                     Multi-turn streaming agent (SSE)
 POST /api/fraud/analyze            4-layer fraud analysis → full case output
 POST /api/fraud/feedback           Analyst outcome → feedback loop
-GET  /api/fraud/drift              PSI drift + fraud rate change detection
+GET  /api/fraud/drift              Score drift (mean shift) + fraud rate change detection
 POST /api/fraud/events/publish     Publish to async event stream
 GET  /api/fraud/events/stats       Queue depth and throughput
 POST /api/loans/eligibility        CBN-compliant loan assessment
@@ -741,7 +741,7 @@ curl -X POST https://nigerian-fintech-agent-production.up.railway.app/api/fraud/
 | **Simulate** | 6 Nigerian attack simulations running the full 4-layer pipeline without consuming LLM tokens |
 | **Eval** | Live precision/recall/F1 per signal + confusion matrix on 40-sample synthetic dataset |
 | **Voice & Files** | Record voice → Groq Whisper → sent to agent. Upload PDF/CSV/image → fraud scan |
-| **Monitor** | PSI drift detection, fraud rate trends, analyst feedback submission |
+| **Monitor** | Score-drift detection, fraud rate trends, analyst feedback submission |
 
 ---
 
@@ -932,7 +932,7 @@ Say: *"Let me send you the link so you can test it while I walk through it."*
 
 3. **Eval → Upload CSV** — Upload labelled history and get precision/recall on real data. Say: *"The synthetic set is a smoke test. Your labels are the only benchmark that counts."*
 
-4. **Monitor → Drift Detection** — Explain PSI-based detection. Say: *"Fraud patterns change — this layer detects signal degradation before it fails in production."*
+4. **Monitor → Drift Detection** — Explain the mean-shift drift check. Say: *"Fraud patterns change — this layer detects signal degradation before it fails in production."*
 
 ### Key phrases
 - *"Precision over recall — a 1% false positive rate destroys a payments product"*
@@ -953,5 +953,5 @@ Say: *"Let me send you the link so you can test it while I walk through it."*
 
 ## License
 
-Proprietary — see LICENSE file for full terms.
+Proprietary, see LICENSE file for full terms.
 Commercial licensing available upon request.
